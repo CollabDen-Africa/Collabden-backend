@@ -3,7 +3,9 @@ const catchAsync = require('../../../helpers/catchAsync');
 const {
   userSignUpService,
   userLoginService,
+  verifyEmailService
 } = require("../services/auth.service");
+const { sanitizeUser } = require('../../../utils/sanitizeUser');
 
 const AuthController ={
     SignUp: catchAsync(async(req, res)=>{
@@ -39,13 +41,24 @@ const AuthController ={
             });
             return res.status(200).json({
                 message: "User profile fetched successfully",
-                data: user,
+                data: sanitizeUser(user),
             });
         }catch(error){
         res.status(400).json({
           message: error.message,
         });
         }
+    }),
+    verifyEmail: catchAsync(async(req, res) => {
+      try {
+        const { verificationToken } = req.body;
+        await verifyEmailService(verificationToken);
+        return res.status(200).json({
+          message: "Email verified successfully",
+        });
+      } catch(error) {
+        res.status(400).json({ message: error.message });
+      }
     })
 }
 

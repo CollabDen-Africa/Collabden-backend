@@ -10,4 +10,5 @@ const router = Router();
 router.post("/signup", validateRequest(signupSchema), authController.SignUp);
 router.post("/login", validateRequest(loginSchema), authController.Login);
 router.get("/profile", authMiddleware, authController.profile);
+router.post("/verify", authController.verifyEmail);
 module.exports = router;
