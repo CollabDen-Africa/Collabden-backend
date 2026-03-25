@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const prisma = require("../../../config/prismaClient");
 const { sendEmail } = require("../../../utils/sendEmail");
 const { generateToken } = require("../../../utils/generateToken");
+const { getVerificationEmailTemplate } = require("../../../utils/emailTemplates");
+const { sanitizeUser } = require("../../../utils/sanitizeUser");
 
 const userSignUpService = async ({ email, password }) => {
   const normalizedEmail = email?.toLowerCase();
@@ -22,19 +24,21 @@ const userSignUpService = async ({ email, password }) => {
   // Create user
   const user = await prisma.userProfile.create({
     data: {
-      email: normalizedEmail,
+      email: "normalizedEmail",
       password: hashedPassword,
       isVerified: false,
       verificationToken,
     },
   });
 
-//   await sendEmail({
-//     to: normalizedEmail,
-//     subject: "Verify account",
-//     text: `Verify: ${process.env.FRONTEND_URL}/verify/${verificationToken}`,
-//   });
-  return user;
+  const emailTemplate = getVerificationEmailTemplate(verificationToken);
+  await sendEmail({
+    to: normalizedEmail,
+    subject: "Welcome to CollabDen - Verify Your Email",
+    text: emailTemplate.text,
+    html: emailTemplate.html,
+  });
+  return sanitizeUser(user);
 };
 const userLoginService = (async ({email, password}) =>{
     const normalizedEmail = email?.toLowerCase();
@@ -58,10 +62,29 @@ const userLoginService = (async ({email, password}) =>{
       });
 
     return {
-        user,
+        user: sanitizeUser(user),
         token
     };
 })
+const verifyEmailService = async (verificationToken) => {
+  const user = await prisma.userProfile.findUnique({
+    where: { verificationToken },
+  });
+
+  if (!user) {
+    throw new Error("Invalid verification token");
+  }
+
+  await prisma.userProfile.update({
+    where: { id: user.id },
+    data: {
+      isVerified: true,
+      verificationToken: null, // Clear token after use
+    },
+  });
+
+  return { message: "Email verified successfully" };
+};
 
 
 
@@ -70,4 +93,5 @@ const userLoginService = (async ({email, password}) =>{
 module.exports = {
   userSignUpService,
   userLoginService,
+  verifyEmailService,
 };
