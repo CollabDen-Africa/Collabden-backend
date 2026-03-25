@@ -1,9 +1,8 @@
 require("dotenv").config();
 const express = require("express");
 const cookieParser = require("cookie-parser");
-
+const userRoutes = require("./modules/users/routes/index");
 const app = express();
-
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -13,11 +12,7 @@ app.get("/", (req, res) => {
   res.json({ message: "Collabden API is running" });
 });
 
-
-app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
-});
-
+app.use("/api/v1/user", userRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
