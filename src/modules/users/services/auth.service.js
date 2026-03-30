@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const prisma = require("../../../config/prismaClient");
 const { sendEmail } = require("../../../utils/sendEmail");
 const { generateToken } = require("../../../utils/generateToken");
-const { getVerificationEmailTemplate } = require("../../../utils/emailTemplates");
+const { getVerificationEmailTemplate, getPasswordResetEmailTemplate } = require("../../../utils/emailTemplates");
 const { sanitizeUser } = require("../../../utils/sanitizeUser");
 
 const userSignUpService = async ({ email, password }) => {
@@ -24,7 +24,7 @@ const userSignUpService = async ({ email, password }) => {
   // Create user
   const user = await prisma.userProfile.create({
     data: {
-      email: "normalizedEmail",
+      email: normalizedEmail,
       password: hashedPassword,
       isVerified: false,
       verificationToken,
@@ -86,6 +86,73 @@ const verifyEmailService = async (verificationToken) => {
   return { message: "Email verified successfully" };
 };
 
+const forgotPasswordService = async (email) => {
+  const normalizedEmail = email?.toLowerCase();
+
+  const user = await prisma.userProfile.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (!user) {
+    throw new Error("User with this email not found");
+  }
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  // Token expires in 1 hour
+  const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+
+  // Save reset token to database
+  await prisma.userProfile.update({
+    where: { id: user.id },
+    data: {
+      resetToken,
+      resetTokenExpiry,
+    },
+  });
+
+  // Send reset email
+  const emailTemplate = getPasswordResetEmailTemplate(resetToken);
+  await sendEmail({
+    to: normalizedEmail,
+    subject: "Password Reset Request - CollabDen",
+    text: emailTemplate.text,
+    html: emailTemplate.html,
+  });
+
+  return { message: "Password reset link sent to your email" };
+};
+
+const resetPasswordService = async (resetToken, newPassword) => {
+  const user = await prisma.userProfile.findUnique({
+    where: { resetToken },
+  });
+
+  if (!user) {
+    throw new Error("Invalid reset token");
+  }
+
+  // Check if token has expired
+  if (new Date() > user.resetTokenExpiry) {
+    throw new Error("Reset token has expired");
+  }
+
+  // Hash new password
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  // Update password and clear reset token
+  await prisma.userProfile.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      resetToken: null,
+      resetTokenExpiry: null,
+    },
+  });
+
+  return { message: "Password reset successfully" };
+};
+
 
 
 
@@ -94,4 +161,6 @@ module.exports = {
   userSignUpService,
   userLoginService,
   verifyEmailService,
+  forgotPasswordService,
+  resetPasswordService,
 };
