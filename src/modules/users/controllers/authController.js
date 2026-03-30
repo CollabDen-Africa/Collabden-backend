@@ -3,7 +3,9 @@ const catchAsync = require('../../../helpers/catchAsync');
 const {
   userSignUpService,
   userLoginService,
-  verifyEmailService
+  verifyEmailService,
+  forgotPasswordService,
+  resetPasswordService
 } = require("../services/auth.service");
 const { sanitizeUser } = require('../../../utils/sanitizeUser');
 
@@ -55,6 +57,28 @@ const AuthController ={
         await verifyEmailService(verificationToken);
         return res.status(200).json({
           message: "Email verified successfully",
+        });
+      } catch(error) {
+        res.status(400).json({ message: error.message });
+      }
+    }),
+    forgotPassword: catchAsync(async(req, res) => {
+      try {
+        const { email } = req.body;
+        const result = await forgotPasswordService(email);
+        return res.status(200).json({
+          message: result.message,
+        });
+      } catch(error) {
+        res.status(400).json({ message: error.message });
+      }
+    }),
+    resetPassword: catchAsync(async(req, res) => {
+      try {
+        const { resetToken, newPassword } = req.body;
+        const result = await resetPasswordService(resetToken, newPassword);
+        return res.status(200).json({
+          message: result.message,
         });
       } catch(error) {
         res.status(400).json({ message: error.message });

@@ -4,6 +4,8 @@ model UserProfile {
   password          String
   isVerified        Boolean  @default(false)
   verificationToken String?  @unique
+  resetToken        String?  @unique
+  resetTokenExpiry  DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
