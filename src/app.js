@@ -1,6 +1,8 @@
 require("dotenv").config();
 const express = require("express");
 const cookieParser = require("cookie-parser");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 const userRoutes = require("./modules/users/routes/index");
 const app = express();
 
@@ -11,6 +13,8 @@ app.use(cookieParser());
 app.get("/", (req, res) => {
   res.json({ message: "Collabden API is running" });
 });
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use("/api/v1/user", userRoutes);
 
