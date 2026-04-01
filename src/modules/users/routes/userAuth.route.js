@@ -95,8 +95,7 @@ router.get("/profile", authMiddleware, authController.profile);
  *           schema:
  *             type: object
  *             required:
- *               - email
- *               - code
+ *               - verificationToken
  *             properties:
  *               email:
  *                 type: string
