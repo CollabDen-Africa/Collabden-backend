@@ -155,4 +155,35 @@ router.post("/forgot-password", validateRequest(forgotPasswordSchema), authContr
  *         description: Password reset successfully
  */
 router.post("/reset-password", validateRequest(resetPasswordSchema), authController.resetPassword);
+/**
+ * @swagger
+ * /api/v1/user/auth/google:
+ *   get:
+ *     summary: Redirects to Google Auth Consent Screen
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Redirect to Google
+ */
+router.get("/auth/google", authController.googleLogin);
+
+/**
+ * @swagger
+ * /api/v1/user/auth/google/callback:
+ *   get:
+ *     summary: Google Auth Callback URL
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Authorization code returned by Google
+ *     responses:
+ *       302:
+ *         description: Redirect to frontend with token
+ */
+router.get("/auth/google/callback", authController.googleCallback);
+
 module.exports = router;
