@@ -1,15 +1,18 @@
-const bcrypt = require("bcryptjs")
+const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const prisma = require("../../../config/prismaClient");
 const { sendEmail } = require("../../../utils/sendEmail");
 const { generateToken } = require("../../../utils/generateToken");
-const { getVerificationEmailTemplate, getPasswordResetEmailTemplate } = require("../../../utils/emailTemplates");
+const {
+  getVerificationEmailTemplate,
+  getPasswordResetEmailTemplate,
+} = require("../../../utils/emailTemplates");
 const { sanitizeUser } = require("../../../utils/sanitizeUser");
+const googleClient = require("../../../config/googleAuth");
 
 const userSignUpService = async ({ email, password }) => {
   const normalizedEmail = email?.toLowerCase();
 
-  // Check if email exists
   const emailExist = await prisma.userProfile.findUnique({
     where: { email: normalizedEmail },
   });
@@ -33,39 +36,39 @@ const userSignUpService = async ({ email, password }) => {
 
   const emailTemplate = getVerificationEmailTemplate(verificationToken);
   await sendEmail({
-    to: normalizedEmail,
+    to: process.env.EMAIL_TO, //change later to user's email
     subject: "Welcome to CollabDen - Verify Your Email",
     text: emailTemplate.text,
     html: emailTemplate.html,
   });
   return sanitizeUser(user);
 };
-const userLoginService = (async ({email, password}) =>{
-    const normalizedEmail = email?.toLowerCase();
-    const user = await prisma.userProfile.findUnique({
-        where: { email: normalizedEmail },
-    });
-    if(!user){
-        throw new Error("User not found");
-    }
-    if (!user.isVerified) {
-          throw new Error("Please verify your account");
-        }
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if(!isPasswordValid){
-        throw new Error("Invalid password");
-    }
-    const token = generateToken({
-        id: user.id,
-        email: user.email,
-        isVerified: user.isVerified,
-      });
+const userLoginService = async ({ email, password }) => {
+  const normalizedEmail = email?.toLowerCase();
+  const user = await prisma.userProfile.findUnique({
+    where: { email: normalizedEmail },
+  });
+  if (!user) {
+    throw new Error("User not found");
+  }
+  if (!user.isVerified) {
+    throw new Error("Please verify your account");
+  }
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    throw new Error("Invalid password");
+  }
+  const token = generateToken({
+    id: user.id,
+    email: user.email,
+    isVerified: user.isVerified,
+  });
 
-    return {
-        user: sanitizeUser(user),
-        token
-    };
-})
+  return {
+    user: sanitizeUser(user),
+    token,
+  };
+};
 const verifyEmailService = async (verificationToken) => {
   const user = await prisma.userProfile.findUnique({
     where: { verificationToken },
@@ -153,9 +156,52 @@ const resetPasswordService = async (resetToken, newPassword) => {
   return { message: "Password reset successfully" };
 };
 
+const googleAuthCallbackService = async (code) => {
+  const { tokens } = await googleClient.getToken(code);
 
+  const ticket = await googleClient.verifyIdToken({
+    idToken: tokens.id_token,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+  const payload = ticket.getPayload();
 
+  const { sub: googleId, email } = payload;
+  console.log("payload payload payload payload", payload);
+  const normalizedEmail = email?.toLowerCase();
 
+  let user = await prisma.userProfile.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (!user) {
+    user = await prisma.userProfile.create({
+      data: {
+        email: normalizedEmail,
+        googleId,
+        isVerified: true,
+      },
+    });
+  } else if (!user.googleId) {
+    user = await prisma.userProfile.update({
+      where: { id: user.id },
+      data: {
+        googleId,
+        isVerified: true,
+      },
+    });
+  }
+
+  const token = generateToken({
+    id: user.id,
+    email: user.email,
+    isVerified: user.isVerified,
+  });
+
+  return {
+    user: sanitizeUser(user),
+    token,
+  };
+};
 
 module.exports = {
   userSignUpService,
@@ -163,4 +209,5 @@ module.exports = {
   verifyEmailService,
   forgotPasswordService,
   resetPasswordService,
+  googleAuthCallbackService,
 };

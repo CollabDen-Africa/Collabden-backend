@@ -1,7 +1,8 @@
 model UserProfile {
   id                String   @id @default(cuid())
   email             String   @unique
-  password          String
+  password          String?
+  googleId          String?  @unique
   isVerified        Boolean  @default(false)
   verificationToken String?  @unique
   resetToken        String?  @unique
