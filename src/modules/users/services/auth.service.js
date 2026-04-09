@@ -166,7 +166,6 @@ const googleAuthCallbackService = async (code) => {
   const payload = ticket.getPayload();
 
   const { sub: googleId, email } = payload;
-  console.log("payload payload payload payload", payload);
   const normalizedEmail = email?.toLowerCase();
 
   let user = await prisma.userProfile.findUnique({
