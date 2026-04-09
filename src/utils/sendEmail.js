@@ -1,11 +1,10 @@
 const { Resend } = require("resend");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const fromEmail = process.env.FROM_EMAIL;
 const sendEmail = async ({ to, subject, text, html }) => {
   try {
     const { data, error } = await resend.emails.send({
-      from: `Collabden <${fromEmail}>`,
+      from: "Collabden <noreply@account.collabden.africa>",
       to,
       subject,
       text,
