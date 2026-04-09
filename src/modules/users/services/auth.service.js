@@ -36,7 +36,7 @@ const userSignUpService = async ({ email, password }) => {
 
   const emailTemplate = getVerificationEmailTemplate(verificationToken);
   await sendEmail({
-    to: process.env.EMAIL_TO, //change later to user's email
+    to: normalizedEmail,
     subject: "Welcome to CollabDen - Verify Your Email",
     text: emailTemplate.text,
     html: emailTemplate.html,
