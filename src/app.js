@@ -7,11 +7,12 @@ const swaggerSpec = require("./config/swagger");
 const userRoutes = require("./modules/users/routes/index");
 const app = express();
 
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://localhost:3000",
-  credentials: true,
-}));
-
+app.use(
+  cors({
+    origin: ["http://localhost:3000", process.env.CORS_ORIGIN].filter(Boolean),
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
