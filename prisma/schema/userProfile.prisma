@@ -5,6 +5,7 @@ model UserProfile {
   googleId          String?  @unique
   isVerified        Boolean  @default(false)
   verificationToken String?  @unique
+  verificationTokenExpiry DateTime? 
   resetToken        String?  @unique
   resetTokenExpiry  DateTime?
   createdAt         DateTime @default(now())

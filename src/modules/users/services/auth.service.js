@@ -13,24 +13,31 @@ const googleClient = require("../../../config/googleAuth");
 const userSignUpService = async ({ email, password }) => {
   const normalizedEmail = email?.toLowerCase();
 
-  const emailExist = await prisma.userProfile.findUnique({
+  const existingUser = await prisma.userProfile.findUnique({
     where: { email: normalizedEmail },
   });
 
-  if (emailExist) {
-    throw new Error("Email already exists, please log in");
+  if (existingUser) {
+    if (
+      !existingUser.isVerified &&
+      existingUser.verificationTokenExpiry < new Date()
+    ) {
+      await prisma.userProfile.delete({ where: { email: normalizedEmail } });
+    } else {
+      throw new Error("Email already exists, please log in");
+    }
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationToken = crypto.randomInt(100000, 999999).toString();
 
-  // Create user
   const user = await prisma.userProfile.create({
     data: {
       email: normalizedEmail,
       password: hashedPassword,
       isVerified: false,
       verificationToken,
+      verificationTokenExpiry: new Date(Date.now() + 15 * 60 * 1000),
     },
   });
 

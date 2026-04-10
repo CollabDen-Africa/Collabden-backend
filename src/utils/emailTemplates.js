@@ -6,10 +6,10 @@ const getVerificationEmailTemplate = (verificationToken) => {
     <html>
       <head>
         <meta charset="UTF-8">
-        <style>
+              <style>
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f5f5f5;
+            background-color: #f0f4f8;
             margin: 0;
             padding: 0;
           }
@@ -17,68 +17,95 @@ const getVerificationEmailTemplate = (verificationToken) => {
             max-width: 600px;
             margin: 20px auto;
             background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             overflow: hidden;
           }
           .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #204f99 0%, #73bf44 100%);
             color: white;
             padding: 40px 20px;
             text-align: center;
           }
           .header h1 {
-            margin: 0;
+            margin: 0 0 6px 0;
             font-size: 28px;
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+          }
+          .header p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.85;
           }
           .content {
             padding: 40px 30px;
             color: #333333;
           }
           .content h2 {
-            color: #667eea;
+            color: #204f99;
             margin-top: 0;
             font-size: 20px;
-          }
-          .success-message {
-            background-color: #f0f9ff;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
-          }
-          .verify-button {
-            display: inline-block;
-            background-color: #667eea;
-            color: white;
-            padding: 12px 30px;
-            text-decoration: none;
-            border-radius: 6px;
-            margin: 30px 0;
             font-weight: 600;
-            transition: background-color 0.3s;
           }
-          .verify-button:hover {
-            background-color: #5568d3;
+          .otp-container {
+            text-align: center;
+            margin: 30px 0;
           }
-          .link-text {
-            color: #666666;
-            font-size: 12px;
-            margin-top: 20px;
-            word-break: break-all;
+          .otp-label {
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+          }
+          .otp-code {
+            display: inline-block;
+            background: linear-gradient(135deg, #eef3fc 0%, #f2fae8 100%);
+            border: 2px dashed #73bf44;
+            border-radius: 12px;
+            padding: 18px 44px;
+            font-size: 40px;
+            font-weight: 800;
+            letter-spacing: 12px;
+            color: #204f99;
+          }
+          .expiry-note {
+            background-color: #fffbf0;
+            border-left: 4px solid #f6a623;
+            padding: 12px 15px;
+            margin: 24px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #555;
+          }
+          .security-note {
+            background-color: #f0f4f8;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #666;
+            margin: 20px 0;
+          }
+          .security-note span {
+            color: #204f99;
+            font-weight: 600;
           }
           .footer {
-            background-color: #f8f8f8;
-            padding: 20px;
+            background: linear-gradient(135deg, #204f99 0%, #1a3f7a 100%);
+            padding: 24px 20px;
             text-align: center;
-            color: #666666;
+            color: rgba(255,255,255,0.75);
             font-size: 12px;
-            border-top: 1px solid #e0e0e0;
+          }
+          .footer a {
+            color: #73bf44;
+            text-decoration: none;
+            font-weight: 600;
           }
           .divider {
             height: 1px;
-            background-color: #e0e0e0;
+            background: linear-gradient(to right, transparent, #e0e0e0, transparent);
             margin: 30px 0;
           }
         </style>
@@ -86,7 +113,7 @@ const getVerificationEmailTemplate = (verificationToken) => {
       <body>
         <div class="container">
           <div class="header">
-            <h1>Welcome to CollabDen! 🎉</h1>
+            <h1>Welcome to CollabDen!</h1>
           </div>
           
           <div class="content">
@@ -97,17 +124,18 @@ const getVerificationEmailTemplate = (verificationToken) => {
             <p>Thank you for signing up with CollabDen! We're excited to have you on board.</p>
             
             <div class="success-message">
-              <p style="margin: 0;"><strong>✓ Your account has been created successfully!</strong></p>
+              <p style="margin: 0;"><strong> Your account has been created successfully!</strong></p>
             </div>
             
-            <p>To get started and unlock all the features of CollabDen, please verify your email address by clicking the button below:</p>
+            <p>Thanks for signing up! Enter the code below in the app to confirm your email address and activate your account.</p>
             
-            <div style="text-align: center;">
-              <a href="${verificationLink}" class="verify-button">Verify Email Address</a>
+          <div class="otp-container">
+              <div class="otp-label">Your verification code</div>
+              <div class="otp-code">${verificationToken}</div>
             </div>
-            
-            <p style="color: #666666; font-size: 14px;">If the button above doesn't work, you can also copy and paste this link into your browser:</p>
-            <p class="link-text">${verificationLink}</p>
+            <div class="expiry-note">
+              ⏱ This code expires in <strong>15 minutes</strong>.
+            </div>
             
             <div class="divider"></div>
             
@@ -128,7 +156,7 @@ const getVerificationEmailTemplate = (verificationToken) => {
     </html>
   `;
 
-  const textContent = `Welcome to CollabDen! Please verify your email by visiting: ${verificationLink}`;
+  const textContent = `Your CollabDen verification code is: ${verificationToken}\n\nThis code expires in 15 minutes.`;
 
   return {
     html: htmlContent,
