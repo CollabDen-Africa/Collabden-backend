@@ -61,6 +61,9 @@ const userLoginService = async ({ email, password }) => {
   if (!user.isVerified) {
     throw new Error("Please verify your account");
   }
+  if (!user.password) {
+    throw new Error("Please log in with your Google account");
+  }
   const isPasswordValid = await bcrypt.compare(password, user.password);
   if (!isPasswordValid) {
     throw new Error("Invalid password");
@@ -76,13 +79,27 @@ const userLoginService = async ({ email, password }) => {
     token,
   };
 };
-const verifyEmailService = async (verificationToken) => {
+const verifyEmailService = async (email, verificationToken) => {
+  const normalizedEmail = email?.toLowerCase();
+
   const user = await prisma.userProfile.findUnique({
-    where: { verificationToken },
+    where: { email: normalizedEmail },
   });
 
   if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (user.verificationToken !== verificationToken) {
     throw new Error("Invalid verification token");
+  }
+
+  if (user.verificationTokenExpiry && new Date() > user.verificationTokenExpiry) {
+    throw new Error("Verification token has expired");
+  }
+
+  if (user.isVerified) {
+    throw new Error("Email is already verified");
   }
 
   await prisma.userProfile.update({
@@ -90,10 +107,47 @@ const verifyEmailService = async (verificationToken) => {
     data: {
       isVerified: true,
       verificationToken: null, // Clear token after use
+      verificationTokenExpiry: null, // Clear expiry as well
     },
   });
 
   return { message: "Email verified successfully" };
+};
+
+const resendVerificationEmailService = async (email) => {
+  const normalizedEmail = email?.toLowerCase();
+
+  const user = await prisma.userProfile.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (user.isVerified) {
+    throw new Error("Email is already verified");
+  }
+
+  const verificationToken = crypto.randomInt(100000, 999999).toString();
+
+  await prisma.userProfile.update({
+    where: { id: user.id },
+    data: {
+      verificationToken,
+      verificationTokenExpiry: new Date(Date.now() + 15 * 60 * 1000),
+    },
+  });
+
+  const emailTemplate = getVerificationEmailTemplate(verificationToken);
+  await sendEmail({
+    to: normalizedEmail,
+    subject: "Resend: Verify Your Email",
+    text: emailTemplate.text,
+    html: emailTemplate.html,
+  });
+
+  return { message: "Verification code resent successfully" };
 };
 
 const forgotPasswordService = async (email) => {
@@ -213,6 +267,7 @@ module.exports = {
   userSignUpService,
   userLoginService,
   verifyEmailService,
+  resendVerificationEmailService,
   forgotPasswordService,
   resetPasswordService,
   googleAuthCallbackService,

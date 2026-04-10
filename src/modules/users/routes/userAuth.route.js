@@ -95,17 +95,43 @@ router.get("/profile", authMiddleware, authController.profile);
  *           schema:
  *             type: object
  *             required:
+ *               - email
  *               - verificationToken
  *             properties:
  *               email:
  *                 type: string
- *               code:
+ *               verificationToken:
  *                 type: string
  *     responses:
  *       200:
  *         description: Email verified
  */
 router.post("/verify", authController.verifyEmail);
+
+/**
+ * @swagger
+ * /api/v1/user/resend-verify:
+ *   post:
+ *     summary: Resend verification code to user email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Verification code resent successfully
+ *       400:
+ *         description: Bad request
+ */
+router.post("/resend-verify", authController.resendVerificationEmail);
 
 /**
  * @swagger
