@@ -4,6 +4,7 @@ const {
   userSignUpService,
   userLoginService,
   verifyEmailService,
+  resendVerificationEmailService,
   forgotPasswordService,
   resetPasswordService,
   googleAuthCallbackService,
@@ -55,10 +56,27 @@ const AuthController = {
   }),
   verifyEmail: catchAsync(async (req, res) => {
     try {
-      const { verificationToken } = req.body;
-      await verifyEmailService(verificationToken);
+      const { email, verificationToken } = req.body;
+      if (!email || !verificationToken) {
+        throw new Error("Email and verification token are required");
+      }
+      await verifyEmailService(email, verificationToken);
       return res.status(200).json({
         message: "Email verified successfully",
+      });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  }),
+  resendVerificationEmail: catchAsync(async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        throw new Error("Email is required");
+      }
+      const result = await resendVerificationEmailService(email);
+      return res.status(200).json({
+        message: result.message,
       });
     } catch (error) {
       res.status(400).json({ message: error.message });
