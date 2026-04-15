@@ -125,7 +125,7 @@ const AuthController = {
 
       const result = await googleAuthCallbackService(code);
 
-      const frontendUrl = process.env.NEXT_APP_URL;
+      const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL;
       res.redirect(`${frontendUrl}/auth-callback?token=${result.token}`);
     } catch (error) {
       res.status(400).json({ message: error.message });
