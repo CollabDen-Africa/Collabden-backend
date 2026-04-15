@@ -1,5 +1,6 @@
 const getVerificationEmailTemplate = (verificationToken) => {
-  const verificationLink = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
+  const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL;
+  const verificationLink = `${frontendUrl}/verify?token=${verificationToken}`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -165,7 +166,8 @@ const getVerificationEmailTemplate = (verificationToken) => {
 };
 
 const getPasswordResetEmailTemplate = (resetToken) => {
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+  const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL;
+  const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   const htmlContent = `
     <!DOCTYPE html>
