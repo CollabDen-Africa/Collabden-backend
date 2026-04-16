@@ -1,0 +1,20 @@
+enum NotificationType {
+  INVITE
+  SYSTEM
+  TASK_ASSIGNED
+  MESSAGE
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isRead    Boolean          @default(false)
+  link      String?          // URL to navigate to (e.g. project workspace)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId])
+}
