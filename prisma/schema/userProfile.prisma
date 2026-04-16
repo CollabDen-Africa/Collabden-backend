@@ -10,4 +10,6 @@ model UserProfile {
   resetTokenExpiry  DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  ownedProjects     Project[] @relation("ProjectOwner")
+  collaborations    ProjectCollaborator[]
 }

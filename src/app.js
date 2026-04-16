@@ -5,6 +5,8 @@ const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
 const userRoutes = require("./modules/users/routes/index");
+const projectRoutes = require("./modules/projects/routes/projects.route");
+const dashboardRoutes = require("./modules/dashboard/routes/dashboard.route");
 const app = express();
 
 app.use(
@@ -24,6 +26,8 @@ app.get("/", (req, res) => {
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use("/api/v1/user", userRoutes);
+app.use("/api/v1/projects", projectRoutes);
+app.use("/api/v1/dashboard", dashboardRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
