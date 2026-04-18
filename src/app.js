@@ -1,13 +1,19 @@
 require("dotenv").config();
 const express = require("express");
+const http = require("http");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
+const { initWebSocket } = require("./config/websocket");
+const { initSubscribers } = require("./events/subscriber");
 const userRoutes = require("./modules/users/routes/index");
 const projectRoutes = require("./modules/projects/routes/projects.route");
 const dashboardRoutes = require("./modules/dashboard/routes/dashboard.route");
+const notificationRoutes = require("./modules/notifications/routes/notification.route");
+
 const app = express();
+const server = http.createServer(app);
 
 app.use(
   cors({
@@ -28,15 +34,23 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/projects", projectRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: "Something went wrong" });
 });
 
+// Initialize WebSocket server (attaches to the HTTP server)
+initWebSocket(server);
+
+// Initialize Redis event subscribers
+initSubscribers();
+
 const PORT = process.env.PORT || 5050;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Collabden server running on port ${PORT}`);
 });
 
 module.exports = app;
+

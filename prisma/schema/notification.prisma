@@ -1,6 +1,7 @@
 enum NotificationType {
   INVITE
   SYSTEM
+  PROJECT_CREATED
   TASK_ASSIGNED
   MESSAGE
 }
