@@ -1,4 +1,6 @@
 const prisma = require("../../../config/prismaClient");
+const { publishEvent } = require("../../../events/publisher");
+const EVENT_TYPES = require("../../../events/eventTypes");
 
 const createProjectService = async ({
   userId,
@@ -36,6 +38,9 @@ const createProjectService = async ({
       activities: true,
     },
   });
+
+  // Publish event — notification creation is handled by the listener
+  await publishEvent(EVENT_TYPES.PROJECT_CREATED, { project, userId });
 
   return project;
 };
@@ -117,6 +122,12 @@ const inviteCollaboratorService = async (projectId, collaboratorId) => {
     throw new Error("User to invite not found");
   }
 
+  // Get project name for the notification message
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { name: true },
+  });
+
   // Add collaborator
   const collaborator = await prisma.projectCollaborator.create({
     data: {
@@ -126,15 +137,11 @@ const inviteCollaboratorService = async (projectId, collaboratorId) => {
     },
   });
 
-  // Create notification for the user
-  await prisma.notification.create({
-    data: {
-      userId: collaboratorId,
-      title: "New Project Invitation",
-      message: `You have been invited to collaborate on project.`,
-      type: "INVITE",
-      link: `/projects/${projectId}`,
-    },
+  // Publish event — notification creation is handled by the listener
+  await publishEvent(EVENT_TYPES.COLLABORATOR_INVITED, {
+    projectId,
+    projectName: project?.name || "a project",
+    collaboratorId,
   });
 
   return collaborator;
@@ -146,3 +153,4 @@ module.exports = {
   getProjectDetailsService,
   inviteCollaboratorService,
 };
+
