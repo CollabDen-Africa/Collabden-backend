@@ -8,6 +8,7 @@ const {
   forgotPasswordService,
   resetPasswordService,
   googleAuthCallbackService,
+  updateOnboardingStatusService,
 } = require("../services/auth.service");
 const googleClient = require("../../../config/googleAuth");
 const { sanitizeUser } = require("../../../utils/sanitizeUser");
@@ -127,6 +128,19 @@ const AuthController = {
 
       const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL;
       res.redirect(`${frontendUrl}/api/auth/google/callback?token=${result.token}`);
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  }),
+  updateOnboardingStatus: catchAsync(async (req, res) => {
+    try {
+      const { completed } = req.body;
+      const userId = req.user.id;
+      const user = await updateOnboardingStatusService(userId, completed);
+      return res.status(200).json({
+        message: "Onboarding status updated successfully",
+        data: user,
+      });
     } catch (error) {
       res.status(400).json({ message: error.message });
     }

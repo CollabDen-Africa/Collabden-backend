@@ -7,7 +7,10 @@ const getUserDashboardData = async (userId) => {
         { ownerId: userId },
         {
           collaborators: {
-            some: { userId: userId },
+            some: { 
+              userId: userId,
+              isActive: true
+            },
           },
         },
       ],

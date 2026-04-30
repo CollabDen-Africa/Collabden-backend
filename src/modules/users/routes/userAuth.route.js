@@ -212,4 +212,33 @@ router.get("/auth/google", authController.googleLogin);
  */
 router.get("/auth/google/callback", authController.googleCallback);
 
+/**
+ * @swagger
+ * /api/v1/user/onboarding:
+ *   patch:
+ *     summary: Update user onboarding status
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - completed
+ *             properties:
+ *               completed:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Onboarding status updated successfully
+ */
+router.patch(
+  "/onboarding",
+  authMiddleware,
+  authController.updateOnboardingStatus
+);
+
 module.exports = router;
