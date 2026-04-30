@@ -263,6 +263,15 @@ const googleAuthCallbackService = async (code) => {
   };
 };
 
+const updateOnboardingStatusService = async (userId, completed) => {
+  const user = await prisma.userProfile.update({
+    where: { id: userId },
+    data: { onboardingCompleted: completed },
+  });
+
+  return sanitizeUser(user);
+};
+
 module.exports = {
   userSignUpService,
   userLoginService,
@@ -271,4 +280,5 @@ module.exports = {
   forgotPasswordService,
   resetPasswordService,
   googleAuthCallbackService,
+  updateOnboardingStatusService,
 };
