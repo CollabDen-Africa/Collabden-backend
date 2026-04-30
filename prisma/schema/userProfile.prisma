@@ -8,6 +8,7 @@ model UserProfile {
   verificationTokenExpiry DateTime? 
   resetToken        String?  @unique
   resetTokenExpiry  DateTime?
+  onboardingCompleted Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   ownedProjects     Project[] @relation("ProjectOwner")
