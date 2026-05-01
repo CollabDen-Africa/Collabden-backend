@@ -72,6 +72,7 @@ const userLoginService = async ({ email, password }) => {
     id: user.id,
     email: user.email,
     isVerified: user.isVerified,
+    onboardingCompleted: user.onboardingCompleted,
   });
 
   return {
@@ -255,6 +256,7 @@ const googleAuthCallbackService = async (code) => {
     id: user.id,
     email: user.email,
     isVerified: user.isVerified,
+    onboardingCompleted: user.onboardingCompleted,
   });
 
   return {
