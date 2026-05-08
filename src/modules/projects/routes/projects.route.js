@@ -7,6 +7,7 @@ const {
   updateProject,
   deleteProject,
   removeCollaborator,
+  getProjectMetadata,
 } = require("../controllers/projects.controller");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 
@@ -144,8 +145,8 @@ router.post("/:id/invite", inviteCollaborator);
 /**
  * @swagger
  * /api/v1/projects/{id}:
- *   patch:
- *     summary: Update project details and visibility
+ *   put:
+ *     summary: Update project details
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []
@@ -182,13 +183,13 @@ router.post("/:id/invite", inviteCollaborator);
  *       404:
  *         description: Project not found
  */
-router.patch("/:id", updateProject);
+router.put("/:id", updateProject);
 
 /**
  * @swagger
  * /api/v1/projects/{id}:
  *   delete:
- *     summary: Delete a project
+ *     summary: Soft delete a project
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []
@@ -232,5 +233,25 @@ router.delete("/:id", deleteProject);
  *         description: Permission denied
  */
 router.delete("/:id/collaborators/:collaboratorId", removeCollaborator);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/metadata:
+ *   get:
+ *     summary: Get project metadata and statistics
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Project metadata fetched successfully
+ */
+router.get("/:id/metadata", getProjectMetadata);
 
 module.exports = router;

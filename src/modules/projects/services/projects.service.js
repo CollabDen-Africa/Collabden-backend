@@ -6,6 +6,19 @@ const {
   PROJECT_STATUS,
   COLLABORATOR_ROLE,
 } = require("../../../utils/constants");
+const { TIER_LIMITS } = require("../../../config/constants");
+
+const checkConnection = async (userId, targetId) => {
+  const connection = await prisma.userConnection.findFirst({
+    where: {
+      OR: [
+        { senderId: userId, receiverId: targetId, status: "ACCEPTED" },
+        { senderId: targetId, receiverId: userId, status: "ACCEPTED" },
+      ],
+    },
+  });
+  return !!connection;
+};
 
 const createProjectService = async ({
   userId,
@@ -14,37 +27,84 @@ const createProjectService = async ({
   genre,
   startDate,
   visibility,
+  collaboratorIds = [],
 }) => {
-  const project = await prisma.project.create({
-    data: {
-      name,
-      description,
-      genre,
-      startDate: new Date(startDate),
-      visibility,
-      ownerId: userId,
-      // Create initial owner as collaborator
-      collaborators: {
-        create: {
+  // Fetch user profile for tier check
+  const user = await prisma.userProfile.findUnique({
+    where: { id: userId },
+    include: {
+      ownedProjects: {
+        where: { status: "ACTIVE", isDeleted: false },
+      },
+    },
+  });
+
+  if (!user) throw new Error("User not found");
+
+  const limits = TIER_LIMITS[user.tier];
+
+  // Check project creation limit
+  if (limits.MAX_PROJECTS !== -1 && user.ownedProjects.length >= limits.MAX_PROJECTS) {
+    throw new Error(`Project limit reached for ${user.tier} tier. Max ${limits.MAX_PROJECTS} projects allowed.`);
+  }
+
+  // Check collaborator invitations
+  if (collaboratorIds.length > 0) {
+    // 1. Check collaborator limit
+    if (collaboratorIds.length > limits.MAX_COLLABORATORS) {
+      throw new Error(`Collaborator limit reached for ${user.tier} tier. Max ${limits.MAX_COLLABORATORS} collaborators allowed.`);
+    }
+
+    // 2. Check connections
+    for (const collaboratorId of collaboratorIds) {
+      const isConnected = await checkConnection(userId, collaboratorId);
+      if (!isConnected) {
+        throw new Error(`You can only invite collaborators you are connected with. Please send a connection request to user ${collaboratorId} first.`);
+      }
+    }
+  }
+
+  const projectData = {
+    name,
+    description,
+    genre,
+    startDate: new Date(startDate),
+    visibility,
+    ownerId: userId,
+    collaborators: {
+      create: [
+        {
           userId: userId,
           role: COLLABORATOR_ROLE.OWNER,
         },
-      },
-      // Automatically generate initial activity
-      activities: {
-        create: {
-          action: "PROJECT_CREATED",
-          details: `Project "${name}" was created.`,
-        },
+        ...collaboratorIds.map((id) => ({
+          userId: id,
+          role: COLLABORATOR_ROLE.COLLABORATOR,
+        })),
+      ],
+    },
+    activities: {
+      create: {
+        action: "PROJECT_CREATED",
+        details: `Project "${name}" was created with ${collaboratorIds.length} initial collaborators.`,
       },
     },
+    metadata: {
+      creatorId: userId,
+      initialCollaboratorCount: collaboratorIds.length,
+      creationPlatform: "web-dashboard",
+    },
+  };
+
+  const project = await prisma.project.create({
+    data: projectData,
     include: {
       collaborators: true,
       activities: true,
     },
   });
 
-  // Publish event — notification creation is handled by the listener
+  // Publish event
   await publishEvent(EVENT_TYPES.PROJECT_CREATED, { project, userId });
 
   return project;
@@ -52,7 +112,7 @@ const createProjectService = async ({
 
 const getProjectListService = async (userId, filters = {}) => {
   const {
-    visibility = PROJECT_VISIBILITY.PUBLIC,
+    visibility,
     page = 1,
     limit = 10,
   } = filters;
@@ -60,7 +120,7 @@ const getProjectListService = async (userId, filters = {}) => {
   const take = parseInt(limit);
 
   const where = {
-    status: "ACTIVE",
+    isDeleted: false,
     AND: [],
   };
 
@@ -165,7 +225,7 @@ const getProjectDetailsService = async (projectId, userId) => {
     },
   });
 
-  if (!project) {
+  if (!project || project.isDeleted) {
     throw new Error("Project not found");
   }
 
@@ -184,72 +244,65 @@ const getProjectDetailsService = async (projectId, userId) => {
   return project;
 };
 
-const inviteCollaboratorService = async (
-  projectId,
-  collaboratorId,
-  inviterId
-) => {
-  // 1. Basic check: Can't invite yourself
-  if (collaboratorId === inviterId) {
-    throw new Error("You cannot invite yourself to your own project.");
-  }
+const inviteCollaboratorService = async (projectId, collaboratorId, inviterId) => {
+  // 1. Fetch project to check permissions and limits
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      owner: true,
+      collaborators: true,
+    },
+  });
 
-  // 2. Fetch project, invited user, and check inviter permissions in parallel
-  const [project, user, existingCollaborator] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: {
-        id: true,
-        name: true,
-        ownerId: true,
-        collaborators: {
-          where: { userId: inviterId },
-        },
-      },
-    }),
-    prisma.userProfile.findUnique({
-      where: { id: collaboratorId },
-      select: { id: true },
-    }),
-    prisma.projectCollaborator.findUnique({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId: collaboratorId,
-        },
-      },
-    }),
-  ]);
-
-  // 3. Existence Validations
-  if (!project) {
+  if (!project || project.isDeleted) {
     throw new Error("Project not found.");
   }
 
-  if (!user) {
-    throw new Error("The user you are trying to invite does not exist.");
+  // 2. Permission Validation: Only owner can invite for now (as per requirements)
+  if (project.ownerId !== inviterId) {
+    throw new Error("Only the project owner can invite collaborators.");
   }
 
-  // 4. Permission Validation: Is the inviter the owner or a collaborator?
-  const isOwner = project.ownerId === inviterId;
-  const isExistingCollaborator = project.collaborators.length > 0;
-
-  if (!isOwner && !isExistingCollaborator) {
-    throw new Error(
-      "You do not have permission to invite collaborators to this project."
-    );
-  }
-
-  // 5. Redundancy Validations
+  // 3. User Validation
   if (project.ownerId === collaboratorId) {
     throw new Error("This user is already the owner of the project.");
   }
 
+  const userToInvite = await prisma.userProfile.findUnique({
+    where: { id: collaboratorId },
+  });
+
+  if (!userToInvite) {
+    throw new Error("The user you are trying to invite does not exist.");
+  }
+
+  // 4. Connection Check
+  const isConnected = await checkConnection(inviterId, collaboratorId);
+  if (!isConnected) {
+    throw new Error("You can only invite collaborators you are connected with.");
+  }
+
+  // 5. Tier/Limit Check
+  const limits = TIER_LIMITS[project.owner.tier];
+  const activeCollaborators = project.collaborators.filter(c => c.isActive && c.role !== COLLABORATOR_ROLE.OWNER);
+
+  if (limits.MAX_COLLABORATORS !== -1 && activeCollaborators.length >= limits.MAX_COLLABORATORS) {
+    throw new Error(`Collaborator limit reached for ${project.owner.tier} tier. Max ${limits.MAX_COLLABORATORS} collaborators allowed.`);
+  }
+
+  // 6. Check if already a collaborator (including inactive ones)
+  const existingCollaborator = await prisma.projectCollaborator.findUnique({
+    where: {
+      projectId_userId: {
+        projectId,
+        userId: collaboratorId,
+      },
+    },
+  });
+
   if (existingCollaborator) {
     if (existingCollaborator.isActive) {
-      throw new Error(
-        "This user is already an active collaborator on this project."
-      );
+      throw new Error("This user is already an active collaborator on this project.");
     } else {
       // Reactivate soft-deleted collaborator
       const collaborator = await prisma.projectCollaborator.update({
@@ -267,7 +320,7 @@ const inviteCollaboratorService = async (
     }
   }
 
-  // 6. Add new collaborator
+  // 7. Add new collaborator
   const collaborator = await prisma.projectCollaborator.create({
     data: {
       projectId,
@@ -276,7 +329,7 @@ const inviteCollaboratorService = async (
     },
   });
 
-  // 7. Publish event — notification creation is handled by the listener
+  // 8. Publish event
   await publishEvent(EVENT_TYPES.COLLABORATOR_INVITED, {
     projectId,
     projectName: project.name,
@@ -289,10 +342,10 @@ const inviteCollaboratorService = async (
 const updateProjectService = async (projectId, userId, updateData) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { ownerId: true },
+    select: { ownerId: true, isDeleted: true },
   });
 
-  if (!project) {
+  if (!project || project.isDeleted) {
     throw new Error("Project not found.");
   }
 
@@ -304,10 +357,14 @@ const updateProjectService = async (projectId, userId, updateData) => {
     where: { id: projectId },
     data: {
       ...updateData,
-      startDate: updateData.startDate
-        ? new Date(updateData.startDate)
-        : undefined,
+      startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
     },
+  });
+
+  await publishEvent(EVENT_TYPES.PROJECT_UPDATED, {
+    projectId,
+    userId,
+    updateData,
   });
 
   return updatedProject;
@@ -316,10 +373,10 @@ const updateProjectService = async (projectId, userId, updateData) => {
 const deleteProjectService = async (projectId, userId) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { ownerId: true, name: true },
+    select: { ownerId: true, name: true, isDeleted: true },
   });
 
-  if (!project) {
+  if (!project || project.isDeleted) {
     throw new Error("Project not found.");
   }
 
@@ -327,25 +384,29 @@ const deleteProjectService = async (projectId, userId) => {
     throw new Error("Only the project owner can delete this project.");
   }
 
-  await prisma.project.delete({
+  // Soft delete
+  await prisma.project.update({
     where: { id: projectId },
+    data: { isDeleted: true },
+  });
+
+  await publishEvent(EVENT_TYPES.PROJECT_DELETED, {
+    projectId,
+    projectName: project.name,
+    userId,
   });
 
   return { message: `Project "${project.name}" has been deleted.` };
 };
 
-const removeCollaboratorService = async (
-  projectId,
-  targetUserId,
-  requesterId
-) => {
+const removeCollaboratorService = async (projectId, targetUserId, requesterId) => {
   // 1. Fetch project to check ownership
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { ownerId: true },
+    select: { ownerId: true, isDeleted: true },
   });
 
-  if (!project) {
+  if (!project || project.isDeleted) {
     throw new Error("Project not found.");
   }
 
@@ -373,13 +434,58 @@ const removeCollaboratorService = async (
     throw new Error("The project owner cannot be removed from the project.");
   }
 
-  // 5. Soft delete: Update isActive to false
+  // 5. Remove the collaborator (soft delete)
   await prisma.projectCollaborator.update({
     where: { id: collaboratorRecord.id },
     data: { isActive: false },
   });
 
-  return { message: "Collaborator removed successfully (soft delete)." };
+  // 6. Publish event
+  await publishEvent(EVENT_TYPES.COLLABORATOR_REMOVED, {
+    projectId,
+    projectName: project.name,
+    removedUserId: targetUserId,
+  });
+
+  return { message: "Collaborator removed successfully." };
+};
+
+const getProjectMetadataService = async (projectId) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      _count: {
+        select: {
+          tasks: true,
+          files: true,
+          messages: true,
+          agreements: true,
+        },
+      },
+      collaborators: {
+        where: { isActive: true },
+      },
+    },
+  });
+
+  if (!project || project.isDeleted) {
+    throw new Error("Project not found");
+  }
+
+  return {
+    projectId: project.id,
+    name: project.name,
+    ownerId: project.ownerId,
+    status: project.status,
+    visibility: project.visibility,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    creationMetadata: project.metadata,
+    currentStats: {
+      ...project._count,
+      collaborators: project.collaborators.length,
+    },
+  };
 };
 
 module.exports = {
@@ -390,5 +496,5 @@ module.exports = {
   updateProjectService,
   deleteProjectService,
   removeCollaboratorService,
+  getProjectMetadataService,
 };
-

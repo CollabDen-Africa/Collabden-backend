@@ -1,3 +1,14 @@
+enum SubscriptionTier {
+  FREE
+  PREMIUM
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 model UserProfile {
   id                String   @id @default(cuid())
   email             String   @unique
@@ -9,8 +20,26 @@ model UserProfile {
   resetToken        String?  @unique
   resetTokenExpiry  DateTime?
   onboardingCompleted Boolean  @default(false)
+  tier              SubscriptionTier @default(FREE)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   ownedProjects     Project[] @relation("ProjectOwner")
   collaborations    ProjectCollaborator[]
+  
+  // Connections
+  sentRequests     UserConnection[] @relation("RequestSender")
+  receivedRequests UserConnection[] @relation("RequestReceiver")
+}
+
+model UserConnection {
+  id          String           @id @default(cuid())
+  senderId    String
+  receiverId  String
+  status      ConnectionStatus @default(PENDING)
+  sender      UserProfile      @relation("RequestSender", fields: [senderId], references: [id])
+  receiver    UserProfile      @relation("RequestReceiver", fields: [receiverId], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([senderId, receiverId])
 }
