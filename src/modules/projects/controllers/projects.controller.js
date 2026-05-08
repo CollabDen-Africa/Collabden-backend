@@ -6,12 +6,13 @@ const {
   updateProjectService,
   deleteProjectService,
   removeCollaboratorService,
+  getProjectMetadataService,
 } = require("../services/projects.service");
 const { PROJECT_VISIBILITY } = require("../../../utils/constants");
 
 const createProject = async (req, res) => {
   try {
-    const { name, description, genre, startDate, visibility } = req.body;
+    const { name, description, genre, startDate, visibility, collaboratorIds } = req.body;
     const userId = req.user.id;
 
     if (!name || !genre || !startDate) {
@@ -29,6 +30,7 @@ const createProject = async (req, res) => {
       genre,
       startDate,
       visibility,
+      collaboratorIds,
     });
 
     res.status(201).json({
@@ -84,19 +86,15 @@ const inviteCollaborator = async (req, res) => {
 
 const updateProject = async (req, res) => {
   try {
-    const { id: projectId } = req.params;
+    const { id } = req.params;
     const userId = req.user.id;
     const { name, description, genre, startDate, visibility } = req.body;
 
-    if (visibility && !Object.values(PROJECT_VISIBILITY).includes(visibility)) {
-      return res.status(400).json({ error: `Invalid visibility value. Must be one of: ${Object.values(PROJECT_VISIBILITY).join(", ")}` });
-    }
-
-    const project = await updateProjectService(projectId, userId, {
+    const project = await updateProjectService(id, userId, {
       name,
       description,
       genre,
-      startDate,
+      startDate: startDate ? new Date(startDate) : undefined,
       visibility,
     });
 
@@ -134,6 +132,17 @@ const removeCollaborator = async (req, res) => {
   }
 };
 
+const getProjectMetadata = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const metadata = await getProjectMetadataService(id);
+    res.status(200).json(metadata);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
 module.exports = {
   createProject,
   getProjects,
@@ -142,4 +151,5 @@ module.exports = {
   updateProject,
   deleteProject,
   removeCollaborator,
-};
+  getProjectMetadata,
+}
