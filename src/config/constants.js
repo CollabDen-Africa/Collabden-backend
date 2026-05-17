@@ -12,7 +12,13 @@ const TIER_LIMITS = {
     UPLOAD_LIMIT_MB: 100,
   },
 };
+const ALLOWED_MIMETYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 
 module.exports = {
   TIER_LIMITS,
+  ALLOWED_MIMETYPES,
 };
