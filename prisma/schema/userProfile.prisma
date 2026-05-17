@@ -15,6 +15,9 @@ model UserProfile {
   password          String?
   googleId          String?  @unique
   isVerified        Boolean  @default(false)
+  identityVerified  Boolean  @default(false)
+  legalName         String?
+  displayName       String?
   verificationToken String?  @unique
   verificationTokenExpiry DateTime? 
   resetToken        String?  @unique

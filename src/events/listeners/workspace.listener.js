@@ -86,7 +86,7 @@ Good luck with your project!`,
         projectId: project.id,
         title: "Standard Mutual NDA Template",
         content: `MUTUAL NON-DISCLOSURE AGREEMENT\n\nThis Agreement is made between the Project Owner and all Collaborators of "${project.name}"...\n\n[This is a generated template. Please review and sign to activate.]`,
-        status: "PENDING",
+        status: "DRAFT",
       },
     });
 
