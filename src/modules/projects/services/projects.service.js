@@ -41,12 +41,13 @@ const createProjectService = async ({
 
   if (!user) throw new Error("User not found");
 
+  if (!user.identityVerified || !user.legalName) {
+    throw new Error("You must complete your identity verification (via government ID/NIN) and set your legal name before creating a project.");
+  }
+
   const limits = TIER_LIMITS[user.tier];
 
-  // Check project creation limit
-  if (limits.MAX_PROJECTS !== -1 && user.ownedProjects.length >= limits.MAX_PROJECTS) {
-    throw new Error(`Project limit reached for ${user.tier} tier. Max ${limits.MAX_PROJECTS} projects allowed.`);
-  }
+
 
   // Check collaborator invitations
   if (collaboratorIds.length > 0) {
@@ -56,10 +57,19 @@ const createProjectService = async ({
     }
 
     // 2. Check connections
+    // 2. Check connections and verification
     for (const collaboratorId of collaboratorIds) {
       const isConnected = await checkConnection(userId, collaboratorId);
       if (!isConnected) {
         throw new Error(`You can only invite collaborators you are connected with. Please send a connection request to user ${collaboratorId} first.`);
+      }
+
+      const colProfile = await prisma.userProfile.findUnique({
+        where: { id: collaboratorId },
+      });
+
+      if (!colProfile || !colProfile.identityVerified || !colProfile.legalName) {
+        throw new Error(`Collaborator ${collaboratorId} must complete their identity verification (via government ID/NIN) and set their legal name before they can collaborate on projects.`);
       }
     }
   }
@@ -274,6 +284,10 @@ const inviteCollaboratorService = async (projectId, collaboratorId, inviterId) =
 
   if (!userToInvite) {
     throw new Error("The user you are trying to invite does not exist.");
+  }
+
+  if (!userToInvite.identityVerified || !userToInvite.legalName) {
+    throw new Error("Collaborators must complete their identity verification (via government ID/NIN) and set their legal name before being added to a project.");
   }
 
   // 4. Connection Check

@@ -11,6 +11,7 @@ const userRoutes = require("./modules/users/routes/index");
 const projectRoutes = require("./modules/projects/routes/projects.route");
 const dashboardRoutes = require("./modules/dashboard/routes/dashboard.route");
 const notificationRoutes = require("./modules/notifications/routes/notification.route");
+const agreementRoutes = require("./routes/agreements");
 
 const app = express();
 const server = http.createServer(app);
@@ -33,6 +34,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/projects", projectRoutes);
+app.use("/api/v1/projects", agreementRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 
