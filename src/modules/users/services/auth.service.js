@@ -11,6 +11,13 @@ const { sanitizeUser } = require("../../../utils/sanitizeUser");
 const googleClient = require("../../../config/googleAuth");
 
 const userSignUpService = async ({ firstName, lastName, email, password }) => {
+  if (!firstName || !firstName.trim()) {
+    throw new Error("First name cannot be empty");
+  }
+  if (!lastName || !lastName.trim()) {
+    throw new Error("Last name cannot be empty");
+  }
+
   const normalizedEmail = email?.toLowerCase();
 
   const existingUser = await prisma.userProfile.findUnique({
