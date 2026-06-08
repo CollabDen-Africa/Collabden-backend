@@ -18,6 +18,8 @@ model UserProfile {
   identityVerified  Boolean  @default(false)
   legalName         String?
   displayName       String?
+  firstName         String?
+  lastName          String?
   verificationToken String?  @unique
   verificationTokenExpiry DateTime? 
   resetToken        String?  @unique

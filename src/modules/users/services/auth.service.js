@@ -10,7 +10,7 @@ const {
 const { sanitizeUser } = require("../../../utils/sanitizeUser");
 const googleClient = require("../../../config/googleAuth");
 
-const userSignUpService = async ({ email, password }) => {
+const userSignUpService = async ({ firstName, lastName, email, password }) => {
   const normalizedEmail = email?.toLowerCase();
 
   const existingUser = await prisma.userProfile.findUnique({
@@ -33,6 +33,8 @@ const userSignUpService = async ({ email, password }) => {
 
   const user = await prisma.userProfile.create({
     data: {
+      firstName,
+      lastName,
       email: normalizedEmail,
       password: hashedPassword,
       isVerified: false,
@@ -227,7 +229,7 @@ const googleAuthCallbackService = async (code) => {
   });
   const payload = ticket.getPayload();
 
-  const { sub: googleId, email } = payload;
+  const { sub: googleId, email, given_name: firstName, family_name: lastName } = payload;
   const normalizedEmail = email?.toLowerCase();
 
   let user = await prisma.userProfile.findUnique({
@@ -237,6 +239,8 @@ const googleAuthCallbackService = async (code) => {
   if (!user) {
     user = await prisma.userProfile.create({
       data: {
+        firstName,
+        lastName,
         email: normalizedEmail,
         googleId,
         isVerified: true,
