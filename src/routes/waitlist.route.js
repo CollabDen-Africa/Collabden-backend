@@ -1,0 +1,93 @@
+const express = require('express');
+const router = express.Router();
+const waitlistController = require('../controllers/waitlist.controller');
+const { authMiddleware } = require("../middleware/auth.middleware");
+const { adminMiddleware } = require("../middleware/admin.middleware");
+
+/**
+ * @swagger
+ * tags:
+ *   name: Waitlist
+ *   description: API endpoints for managing the early access waitlist
+ */
+
+/**
+ * @swagger
+ * /api/v1/waitlist:
+ *   post:
+ *     summary: Join the waitlist
+ *     description: Adds a new user's email to the waitlist.
+ *     tags: [Waitlist]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *     responses:
+ *       201:
+ *         description: Successfully joined the waitlist
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Successfully joined the waitlist!
+ *                 entry:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Bad request (missing/invalid email, or already on the waitlist)
+ *       500:
+ *         description: Internal server error
+ */
+router.post("/", waitlistController.joinWaitlist);
+
+/**
+ * @swagger
+ * /api/v1/waitlist/download:
+ *   get:
+ *     summary: Download waitlist as Excel (Admin Only)
+ *     description: Generates and downloads an Excel file containing all waitlist entries. Requires Admin privileges.
+ *     tags: [Waitlist]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Excel file containing the waitlist
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (Admin access required)
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  "/download",
+  authMiddleware,
+  adminMiddleware,
+  waitlistController.downloadWaitlist
+);
+
+module.exports = router;
