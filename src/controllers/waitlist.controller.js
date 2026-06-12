@@ -3,10 +3,22 @@ const xlsx = require('xlsx');
 
 const joinWaitlist = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, name, phoneNumber } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email must be a string' });
+    }
+
+    if (name !== undefined && typeof name !== 'string') {
+      return res.status(400).json({ error: 'Name must be a string' });
+    }
+
+    if (phoneNumber !== undefined && typeof phoneNumber !== 'string') {
+      return res.status(400).json({ error: 'Phone number must be a string' });
     }
 
     // Basic server-side email validation
@@ -26,6 +38,8 @@ const joinWaitlist = async (req, res) => {
     await prisma.waitlistEntry.create({
       data: {
         email,
+        name,
+        phoneNumber,
       },
     });
 
@@ -45,7 +59,9 @@ const downloadWaitlist = async (req, res) => {
     // Convert entries to worksheet format
     const worksheetData = entries.map((entry) => ({
       ID: entry.id,
+      Name: entry.name || '',
       Email: entry.email,
+      'Phone Number': entry.phoneNumber || '',
       'Joined At': entry.createdAt.toISOString(),
     }));
 
