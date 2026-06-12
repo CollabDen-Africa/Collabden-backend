@@ -1,0 +1,70 @@
+enum MessageRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model MessageRequest {
+  id         String               @id @default(cuid())
+  senderId   String
+  receiverId String
+  message    String
+  status     MessageRequestStatus @default(PENDING)
+  sender     UserProfile          @relation("MessageRequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   UserProfile          @relation("MessageRequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model DirectChat {
+  id                 String          @id @default(cuid())
+  user1Id            String
+  user2Id            String
+  isArchivedByUser1  Boolean         @default(false)
+  isArchivedByUser2  Boolean         @default(false)
+  isDeletedByUser1   Boolean         @default(false)
+  isDeletedByUser2   Boolean         @default(false)
+  user1              UserProfile     @relation("DirectChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2              UserProfile     @relation("DirectChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages           DirectMessage[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([user1Id, user2Id])
+}
+
+model DirectMessage {
+  id            String                  @id @default(cuid())
+  chatId        String
+  senderId      String
+  content       String?
+  voiceUrl      String?
+  voiceDuration Int?
+  isRead        Boolean                 @default(false)
+  parentId      String?
+  parent        DirectMessage?          @relation("DirectMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies       DirectMessage[]         @relation("DirectMessageReplies")
+  reactions     DirectMessageReaction[]
+  chat          DirectChat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender        UserProfile             @relation("DirectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([chatId])
+  @@index([senderId])
+}
+
+model DirectMessageReaction {
+  id        String        @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  message   DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      UserProfile   @relation("DirectMessageReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@unique([messageId, userId, emoji])
+}

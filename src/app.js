@@ -11,6 +11,7 @@ const userRoutes = require("./modules/users/routes/index");
 const projectRoutes = require("./modules/projects/routes/projects.route");
 const dashboardRoutes = require("./modules/dashboard/routes/dashboard.route");
 const notificationRoutes = require("./modules/notifications/routes/notification.route");
+const messagingRoutes = require("./modules/messaging/routes/messaging.route");
 const agreementRoutes = require("./routes/agreements");
 const waitlistRoutes = require("./routes/waitlist.route");
 
@@ -38,6 +39,7 @@ app.use("/api/v1/projects", projectRoutes);
 app.use("/api/v1/projects", agreementRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/messaging", messagingRoutes);
 app.use("/api/v1/waitlist", waitlistRoutes);
 
 app.use((err, req, res, next) => {
