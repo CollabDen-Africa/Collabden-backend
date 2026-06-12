@@ -1,5 +1,7 @@
 model WaitlistEntry {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String?
+  phoneNumber String?
+  createdAt   DateTime @default(now())
 }
