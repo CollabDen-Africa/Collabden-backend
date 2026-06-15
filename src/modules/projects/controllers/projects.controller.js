@@ -45,8 +45,10 @@ const createProject = async (req, res) => {
 const getProjects = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { visibility, page, limit } = req.query;
-    const data = await getProjectListService(userId, { visibility, page, limit });
+    const { visibility, page, limit, status, search, genre, sortBy, sortOrder } = req.query;
+    const data = await getProjectListService(userId, { 
+      visibility, page, limit, status, search, genre, sortBy, sortOrder 
+    });
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });

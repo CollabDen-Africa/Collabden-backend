@@ -26,11 +26,18 @@ const { adminMiddleware } = require("../middleware/admin.middleware");
  *             type: object
  *             required:
  *               - email
+ *               - name
  *             properties:
  *               email:
  *                 type: string
  *                 format: email
  *                 example: user@example.com
+ *               name:
+ *                 type: string
+ *                 example: John Doe
+ *               phoneNumber:
+ *                 type: string
+ *                 example: +1234567890
  *     responses:
  *       201:
  *         description: Successfully joined the waitlist
@@ -48,6 +55,10 @@ const { adminMiddleware } = require("../middleware/admin.middleware");
  *                     id:
  *                       type: string
  *                     email:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     phoneNumber:
  *                       type: string
  *                     createdAt:
  *                       type: string

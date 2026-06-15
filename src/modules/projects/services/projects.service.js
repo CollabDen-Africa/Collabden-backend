@@ -125,9 +125,14 @@ const getProjectListService = async (userId, filters = {}) => {
     visibility,
     page = 1,
     limit = 10,
+    status,
+    search,
+    genre,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
   } = filters;
-  const skip = (page - 1) * limit;
-  const take = parseInt(limit);
+  const skip = (Math.max(1, parseInt(page) || 1) - 1) * Math.min(100, Math.max(1, parseInt(limit) || 10));
+  const take = Math.min(100, Math.max(1, parseInt(limit) || 10));
 
   const where = {
     isDeleted: false,
@@ -171,6 +176,28 @@ const getProjectListService = async (userId, filters = {}) => {
     });
   }
 
+  if (status) {
+    where.status = status;
+  }
+
+  if (genre) {
+    where.genre = genre;
+  }
+
+  if (search) {
+    where.AND.push({
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  // Define allowed sorting fields to prevent injection or invalid fields
+  const allowedSortFields = ['createdAt', 'updatedAt', 'name', 'startDate'];
+  const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+  const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) ? sortOrder.toLowerCase() : 'desc';
+
   // Fetch total count for pagination metadata
   const total = await prisma.project.count({ where });
 
@@ -195,7 +222,7 @@ const getProjectListService = async (userId, filters = {}) => {
         },
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: { [validSortBy]: validSortOrder },
     skip,
     take,
   });
