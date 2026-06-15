@@ -70,6 +70,35 @@ router.post("/", createProject);
  *           enum: [PUBLIC, PRIVATE]
  *         description: Filter projects by visibility
  *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter projects by status
+ *       - in: query
+ *         name: genre
+ *         schema:
+ *           type: string
+ *         description: Filter projects by genre
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search projects by name or description (case-insensitive)
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, updatedAt, name, startDate]
+ *           default: createdAt
+ *         description: Field to sort the projects by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sorting direction (ascending or descending)
+ *       - in: query
  *         name: page
  *         schema:
  *           type: integer
