@@ -5,6 +5,8 @@ const {
   uploadSignedAgreementService,
   esignAgreementService,
   editAgreementService,
+  getUserAgreementsService,
+  downloadAgreementService,
 } = require('../services/agreement.service');
 
 const uploadAgreementHandler = async (req, res) => {
@@ -107,6 +109,38 @@ const editAgreementHandler = async (req, res) => {
   }
 };
 
+const getUserAgreementsHandler = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { page = 1, limit = 10 } = req.query;
+
+    const result = await getUserAgreementsService(userId, page, limit);
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in getUserAgreementsHandler:', error);
+    const status = error.status || 500;
+    return res.status(status).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
+const downloadAgreementHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const { buffer, filename, contentType } = await downloadAgreementService(id, userId);
+
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', buffer.length);
+    return res.send(buffer);
+  } catch (error) {
+    console.error('Error in downloadAgreementHandler:', error);
+    const status = error.status || 500;
+    return res.status(status).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
 module.exports = {
   uploadAgreementHandler,
   getAgreementsService,
@@ -115,4 +149,6 @@ module.exports = {
   uploadSignedAgreementHandler,
   esignAgreementHandler,
   editAgreementHandler,
+  getUserAgreementsHandler,
+  downloadAgreementHandler,
 };

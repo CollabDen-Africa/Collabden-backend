@@ -9,6 +9,7 @@ const {
   uploadSignedAgreementHandler,
   esignAgreementHandler,
   editAgreementHandler,
+  downloadAgreementHandler,
 } = require('../modules/projects/controllers/agreement.controller');
 
 const router = express.Router({ mergeParams: true });
@@ -288,6 +289,53 @@ router.post(
   authMiddleware,
   requireProjectAccess,
   esignAgreementHandler
+);
+
+// GET route to proxy-download an agreement file (keeps Supabase URL hidden)
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/agreements/{agreementId}/download:
+ *   get:
+ *     summary: Download an agreement file through the server (Supabase URL not exposed to client)
+ *     description: >
+ *       Proxies the agreement PDF through the server so the raw Supabase URL is never
+ *       exposed to the client. The authenticated user's identity is resolved from the
+ *       Bearer token — no user ID is needed in the URL.
+ *       Access is granted only if the user is the project owner or an active collaborator.
+ *     tags: [Agreements]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the project this agreement belongs to
+ *       - in: path
+ *         name: agreementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the agreement to download (NOT the user ID — user is identified via auth token)
+ *     responses:
+ *       200:
+ *         description: PDF file stream
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       403:
+ *         description: No access to this agreement
+ *       404:
+ *         description: Agreement or file not found
+ */
+router.get(
+  '/:projectId/agreements/:id/download',
+  authMiddleware,
+  requireProjectAccess,
+  downloadAgreementHandler
 );
 
 module.exports = router;

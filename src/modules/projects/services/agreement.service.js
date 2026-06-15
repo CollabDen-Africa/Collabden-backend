@@ -383,6 +383,119 @@ const editAgreementService = async (id, file, updateData, userId) => {
   return updatedAgreement;
 };
 
+const getUserAgreementsService = async (userId, page = 1, limit = 10) => {
+  const parsedPage = Math.max(1, parseInt(page) || 1);
+  const parsedLimit = Math.min(100, Math.max(1, parseInt(limit) || 10));
+  const skip = (parsedPage - 1) * parsedLimit;
+
+  // Match agreements from projects where user is either the OWNER
+  // or an active COLLABORATOR
+  const whereClause = {
+    project: {
+      OR: [
+        { ownerId: userId },
+        {
+          collaborators: {
+            some: {
+              userId: userId,
+            },
+          },
+        },
+      ],
+    },
+  };
+
+  const totalCount = await prisma.legalAgreement.count({ where: whereClause });
+
+  const agreements = await prisma.legalAgreement.findMany({
+    where: whereClause,
+    include: { project: true, signatures: true },
+    orderBy: { createdAt: "desc" },
+    skip,
+    take: parsedLimit,
+  });
+  // Generate fresh signed URLs
+  const agreementsWithUrls = await Promise.all(
+    agreements.map(async (agreement) => {
+      if (agreement.filePath && supabase) {
+        const { data, error } = await supabase.storage
+          .from("agreements")
+          .createSignedUrl(agreement.filePath, 3600);
+
+        if (!error && data?.signedUrl) {
+          agreement.fileUrl = data.signedUrl;
+        }
+      }
+      return agreement;
+    })
+  );
+
+  return {
+    agreements: agreementsWithUrls,
+    pagination: {
+      total: totalCount,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(totalCount / limit),
+    },
+  };
+};
+
+const downloadAgreementService = async (agreementId, userId) => {
+  const agreement = await prisma.legalAgreement.findUnique({
+    where: { id: agreementId },
+    include: {
+      project: {
+        include: { collaborators: true },
+      },
+    },
+  });
+
+  if (!agreement) {
+    const error = new Error('Agreement not found.');
+    error.status = 404;
+    throw error;
+  }
+
+  const isOwner = agreement.project.ownerId === userId;
+  const isCollaborator = agreement.project.collaborators.some(
+    (c) => c.userId === userId
+  );
+
+  if (!isOwner && !isCollaborator) {
+    const error = new Error('You do not have access to this agreement.');
+    error.status = 403;
+    throw error;
+  }
+
+  if (!agreement.filePath) {
+    const error = new Error('No file attached to this agreement.');
+    error.status = 404;
+    throw error;
+  }
+
+  // Download the file from Supabase storage
+  const { data, error: supabaseError } = await supabase.storage
+    .from('agreements')
+    .download(agreement.filePath);
+
+  if (supabaseError || !data) {
+    const error = new Error('Failed to retrieve agreement file.');
+    error.status = 502;
+    throw error;
+  }
+
+  // Convert Blob to Buffer
+  const arrayBuffer = await data.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  const filename = agreement.title
+    ? `${agreement.title.replace(/[^a-z0-9_\-. ]/gi, '_')}.pdf`
+    : 'agreement.pdf';
+
+  return { buffer, filename, contentType: 'application/pdf' };
+};
+
 module.exports = {
   uploadAgreementService,
   getAgreementsService,
@@ -390,4 +503,6 @@ module.exports = {
   uploadSignedAgreementService,
   esignAgreementService,
   editAgreementService,
+  getUserAgreementsService,
+  downloadAgreementService,
 };
