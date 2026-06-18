@@ -35,6 +35,14 @@ model UserProfile {
   // Connections
   sentRequests     UserConnection[] @relation("RequestSender")
   receivedRequests UserConnection[] @relation("RequestReceiver")
+
+  // Direct Message Relations
+  sentDirectMessages      DirectMessage[]          @relation("DirectMessageSender")
+  messageReactions        DirectMessageReaction[]  @relation("DirectMessageReactionUser")
+  directChatsAsUser1      DirectChat[]             @relation("DirectChatUser1")
+  directChatsAsUser2      DirectChat[]             @relation("DirectChatUser2")
+  sentMessageRequests     MessageRequest[]         @relation("MessageRequestSender")
+  receivedMessageRequests MessageRequest[]         @relation("MessageRequestReceiver")
 }
 
 model UserConnection {
