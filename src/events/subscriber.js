@@ -1,6 +1,7 @@
 const { subscriberClient } = require("../config/redis");
 const { registerNotificationListeners } = require("./listeners/notification.listener");
 const { registerWorkspaceListeners } = require("./listeners/workspace.listener");
+const { registerPaymentListeners } = require("./listeners/payment.listener");
 
 /**
  * Initialize all Redis event subscribers.
@@ -9,6 +10,7 @@ const { registerWorkspaceListeners } = require("./listeners/workspace.listener")
 const initSubscribers = () => {
   registerNotificationListeners(subscriberClient);
   registerWorkspaceListeners(subscriberClient);
+  registerPaymentListeners(subscriberClient);
   console.log("Event subscribers initialized");
 };
 
