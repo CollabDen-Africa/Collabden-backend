@@ -50,6 +50,54 @@ const joinWaitlist = async (req, res) => {
   }
 };
 
+const getWaitlist = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const search = req.query.search?.trim() || '';
+    const skip = (page - 1) * limit;
+
+    const where = search
+      ? {
+          OR: [
+            { email: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+
+    const [entries, total] = await Promise.all([
+      prisma.waitlistEntry.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phoneNumber: true,
+          createdAt: true,
+        },
+      }),
+      prisma.waitlistEntry.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      data: entries,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('Waitlist fetch error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 const downloadWaitlist = async (req, res) => {
   try {
     const entries = await prisma.waitlistEntry.findMany({
@@ -84,5 +132,6 @@ const downloadWaitlist = async (req, res) => {
 
 module.exports = {
   joinWaitlist,
+  getWaitlist,
   downloadWaitlist,
 };

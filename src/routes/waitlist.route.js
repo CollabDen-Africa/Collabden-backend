@@ -72,6 +72,83 @@ router.post("/", waitlistController.joinWaitlist);
 
 /**
  * @swagger
+ * /api/v1/waitlist:
+ *   get:
+ *     summary: Retrieve all waitlist entries (Admin Only)
+ *     description: Returns a paginated list of all waitlist entries. Supports optional search by name or email. Requires Admin privileges.
+ *     tags: [Waitlist]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (1-indexed)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *         description: Number of entries per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter entries by name or email (case-insensitive)
+ *     responses:
+ *       200:
+ *         description: Paginated list of waitlist entries
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       phoneNumber:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (Admin access required)
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  "/",
+  authMiddleware,
+  adminMiddleware,
+  waitlistController.getWaitlist
+);
+
+/**
+ * @swagger
  * /api/v1/waitlist/download:
  *   get:
  *     summary: Download waitlist as Excel (Admin Only)
