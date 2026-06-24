@@ -44,27 +44,27 @@ model ProjectMessage {
 }
 
 model LegalAgreement {
-  id          String          @id @default(cuid())
-  projectId   String
-  title       String?
-  content     String?
-  fileUrl     String?
-  filePath    String?
-  status      AgreementStatus @default(DRAFT)
+  id            String               @id @default(cuid())
+  projectId     String
+  title         String?
+  content       String?
+  fileUrl       String?
+  filePath      String?
+  status        AgreementStatus      @default(DRAFT)
   auditMetadata Json?
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  signatures  AgreementSignature[]
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  signatures    AgreementSignature[]
 }
 
 model AgreementSignature {
-  id              String         @id @default(cuid())
-  agreementId     String
-  userId          String
-  legalName       String
-  signedAt        DateTime       @default(now())
-  agreement       LegalAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  id          String         @id @default(cuid())
+  agreementId String
+  userId      String
+  legalName   String
+  signedAt    DateTime       @default(now())
+  agreement   LegalAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
 }
 
 model ActivityLog {

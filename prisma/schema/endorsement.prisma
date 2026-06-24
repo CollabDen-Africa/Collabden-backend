@@ -1,0 +1,14 @@
+model Endorsement {
+  id          String   @id @default(cuid())
+  endorserId  String
+  recipientId String
+  content     String
+  projectId   String?
+  isApproved  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  endorser  UserProfile @relation("EndorsementSender", fields: [endorserId], references: [id])
+  recipient UserProfile @relation("EndorsementReceiver", fields: [recipientId], references: [id])
+  project   Project?    @relation(fields: [projectId], references: [id])
+}

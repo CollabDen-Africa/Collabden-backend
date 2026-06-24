@@ -8,5 +8,6 @@ const router = Router()
 router.use('/', userAuthRoutes)
 router.use('/connections', connectionRoutes)
 router.use('/agreements', userAgreementsRoutes)
+router.use('/profile', require('./profile.route'))
 
 module.exports = router;
