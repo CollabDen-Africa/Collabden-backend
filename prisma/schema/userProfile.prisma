@@ -59,6 +59,18 @@ model UserProfile {
 
   // Audit Logs
   auditLogs AuditLog[]
+  sentDirectMessages      DirectMessage[]          @relation("DirectMessageSender")
+  messageReactions        DirectMessageReaction[]  @relation("DirectMessageReactionUser")
+  directChatsAsUser1      DirectChat[]             @relation("DirectChatUser1")
+  directChatsAsUser2      DirectChat[]             @relation("DirectChatUser2")
+  sentMessageRequests     MessageRequest[]         @relation("MessageRequestSender")
+  receivedMessageRequests MessageRequest[]         @relation("MessageRequestReceiver")
+
+  // Wallet & Payments
+  wallet              Wallet?
+  transactions        Transaction[]
+  bankAccounts        BankAccount[]
+  paymentRecords      PaymentRecord[]
 }
 
 model UserConnection {
