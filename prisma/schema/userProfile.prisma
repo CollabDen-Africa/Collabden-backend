@@ -1,6 +1,8 @@
 enum SubscriptionTier {
-  FREE
-  PREMIUM
+  BASIC
+  ADVANCE
+  PRO
+  ELITE
 }
 
 enum ConnectionStatus {
@@ -35,7 +37,7 @@ model UserProfile {
   resetToken              String?               @unique
   resetTokenExpiry        DateTime?
   onboardingCompleted     Boolean               @default(false)
-  tier                    SubscriptionTier      @default(FREE)
+  tier                    SubscriptionTier      @default(BASIC)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   ownedProjects           Project[]             @relation("ProjectOwner")
@@ -58,19 +60,18 @@ model UserProfile {
   receivedEndorsements Endorsement[] @relation("EndorsementReceiver")
 
   // Audit Logs
-  auditLogs AuditLog[]
-  sentDirectMessages      DirectMessage[]          @relation("DirectMessageSender")
-  messageReactions        DirectMessageReaction[]  @relation("DirectMessageReactionUser")
-  directChatsAsUser1      DirectChat[]             @relation("DirectChatUser1")
-  directChatsAsUser2      DirectChat[]             @relation("DirectChatUser2")
-  sentMessageRequests     MessageRequest[]         @relation("MessageRequestSender")
-  receivedMessageRequests MessageRequest[]         @relation("MessageRequestReceiver")
+  auditLogs           AuditLog[]
 
   // Wallet & Payments
   wallet              Wallet?
   transactions        Transaction[]
   bankAccounts        BankAccount[]
   paymentRecords      PaymentRecord[]
+
+  // Subscriptions
+  subscription        Subscription?
+  invoices            Invoice[]
+  savedPaymentMethods SavedPaymentMethod[]
 }
 
 model UserConnection {

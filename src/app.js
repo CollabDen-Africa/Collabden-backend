@@ -15,6 +15,7 @@ const messagingRoutes = require("./modules/messaging/routes/messaging.route");
 const agreementRoutes = require("./routes/agreements");
 const waitlistRoutes = require("./routes/waitlist.route");
 const paymentRoutes = require("./modules/payments/routes/payment.route");
+const subscriptionRoutes = require("./modules/subscriptions/routes/subscription.route");
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +44,7 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/messaging", messagingRoutes);
 app.use("/api/v1/waitlist", waitlistRoutes);
 app.use("/api/v1/payments", paymentRoutes);
+app.use("/api/v1/subscriptions", subscriptionRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
