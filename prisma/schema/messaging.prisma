@@ -20,18 +20,18 @@ model MessageRequest {
 }
 
 model DirectChat {
-  id                 String          @id @default(cuid())
-  user1Id            String
-  user2Id            String
-  isArchivedByUser1  Boolean         @default(false)
-  isArchivedByUser2  Boolean         @default(false)
-  isDeletedByUser1   Boolean         @default(false)
-  isDeletedByUser2   Boolean         @default(false)
-  user1              UserProfile     @relation("DirectChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2              UserProfile     @relation("DirectChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
-  messages           DirectMessage[]
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  id                String          @id @default(cuid())
+  user1Id           String
+  user2Id           String
+  isArchivedByUser1 Boolean         @default(false)
+  isArchivedByUser2 Boolean         @default(false)
+  isDeletedByUser1  Boolean         @default(false)
+  isDeletedByUser2  Boolean         @default(false)
+  user1             UserProfile     @relation("DirectChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2             UserProfile     @relation("DirectChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages          DirectMessage[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   @@unique([user1Id, user2Id])
 }

@@ -9,7 +9,8 @@ const {
 } = require("../../../utils/emailTemplates");
 const { sanitizeUser } = require("../../../utils/sanitizeUser");
 const googleClient = require("../../../config/googleAuth");
-
+const { ACCOUNT_STATUS, LOGIN_STATUS } = require("../../../config/constants");
+const { verifySync } = require("otplib");
 const userSignUpService = async ({ firstName, lastName, email, password }) => {
   if (!firstName || !firstName.trim()) {
     throw new Error("First name cannot be empty");
@@ -59,29 +60,90 @@ const userSignUpService = async ({ firstName, lastName, email, password }) => {
   });
   return sanitizeUser(user);
 };
-const userLoginService = async ({ email, password }) => {
+const userLoginService = async ({
+  email,
+  password,
+  ipAddress,
+  userAgent,
+  twoFactorCode,
+}) => {
   const normalizedEmail = email?.toLowerCase();
   const user = await prisma.userProfile.findUnique({
     where: { email: normalizedEmail },
   });
+
   if (!user) {
     throw new Error("User not found");
   }
+
+  // Deactivated/Deleted check
+  if (user.accountStatus === ACCOUNT_STATUS.DEACTIVATED) {
+    throw new Error("Account is deactivated");
+  } else if (user.accountStatus === ACCOUNT_STATUS.DELETED) {
+    throw new Error("Account has been deleted");
+  }
+
   if (!user.isVerified) {
     throw new Error("Please verify your account");
   }
   if (!user.password) {
     throw new Error("Please log in with your Google account");
   }
+
   const isPasswordValid = await bcrypt.compare(password, user.password);
+
   if (!isPasswordValid) {
+    // Log failed activity
+    await prisma.loginActivity.create({
+      data: {
+        userId: user.id,
+        ipAddress: ipAddress || "",
+        userAgent: userAgent || "",
+        status: LOGIN_STATUS.FAILED,
+      },
+    });
     throw new Error("Invalid password");
   }
+
+  // 2FA logic
+  if (user.isTwoFactorEnabled) {
+    if (!twoFactorCode) {
+      return { requires2FA: true, message: "2FA code required" };
+    }
+
+    const isValidCode = verifySync({
+      token: twoFactorCode,
+      secret: user.twoFactorSecret,
+    }).valid;
+    if (!isValidCode) {
+      await prisma.loginActivity.create({
+        data: {
+          userId: user.id,
+          ipAddress: ipAddress || "",
+          userAgent: userAgent || "",
+          status: LOGIN_STATUS.FAILED,
+        },
+      });
+      throw new Error("Invalid 2FA code");
+    }
+  }
+
+  // Log successful activity
+  await prisma.loginActivity.create({
+    data: {
+      userId: user.id,
+      ipAddress: ipAddress || "",
+      userAgent: userAgent || "",
+      status: LOGIN_STATUS.SUCCESS,
+    },
+  });
+
   const token = generateToken({
     id: user.id,
     email: user.email,
     isVerified: user.isVerified,
     onboardingCompleted: user.onboardingCompleted,
+    tokenVersion: user.tokenVersion,
   });
 
   return {

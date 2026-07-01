@@ -1,12 +1,20 @@
 enum SubscriptionTier {
-  FREE
-  PREMIUM
+  BASIC
+  ADVANCE
+  PRO
+  ELITE
 }
 
 enum ConnectionStatus {
   PENDING
   ACCEPTED
   REJECTED
+}
+
+enum AccountStatus {
+  ACTIVE
+  DEACTIVATED
+  DELETED
 }
 
 model UserProfile {
@@ -35,7 +43,11 @@ model UserProfile {
   resetToken              String?               @unique
   resetTokenExpiry        DateTime?
   onboardingCompleted     Boolean               @default(false)
-  tier                    SubscriptionTier      @default(FREE)
+  tier                    SubscriptionTier      @default(BASIC)
+  twoFactorSecret         String?
+  isTwoFactorEnabled      Boolean               @default(false)
+  tokenVersion            Int                   @default(0)
+  accountStatus           AccountStatus         @default(ACTIVE)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   ownedProjects           Project[]             @relation("ProjectOwner")
@@ -60,11 +72,24 @@ model UserProfile {
   // Audit Logs
   auditLogs AuditLog[]
 
+  // Subscriptions
+  subscription        Subscription?
+  invoices            Invoice[]
+  savedPaymentMethods SavedPaymentMethod[]
+
   // Wallet & Payments
-  wallet              Wallet?
-  transactions        Transaction[]
-  bankAccounts        BankAccount[]
-  paymentRecords      PaymentRecord[]
+  wallet         Wallet?
+  transactions   Transaction[]
+  bankAccounts   BankAccount[]
+  paymentRecords PaymentRecord[]
+
+  // Security & Account
+  loginActivities    LoginActivity[]
+  dataExportRequests DataExportRequest[]
+  supportTickets     SupportTicket[]
+
+  // Notification Settings
+  notificationSetting NotificationSetting?
 }
 
 model UserConnection {
