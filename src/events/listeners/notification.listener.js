@@ -1,7 +1,7 @@
 const EVENT_TYPES = require("../eventTypes");
 const { createNotification } = require("../../modules/notifications/services/notification.service");
+const { shouldSend } = require("../../modules/notifications/services/notificationSetting.service");
 const { sendToUser } = require("../../config/websocket");
-
 /**
  * Register all notification-related event listeners on the Redis subscriber.
  * @param {import("ioredis").Redis} subscriberClient
@@ -63,6 +63,12 @@ const registerNotificationListeners = (subscriberClient) => {
 const handleProjectCreated = async ({ project, userId }) => {
   console.log(`[Listener] Processing PROJECT_CREATED for user ${userId}`);
 
+  const canSendInApp = await shouldSend(userId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${userId} (settings disabled)`);
+    return;
+  }
+
   const notification = await createNotification({
     userId,
     title: "Project Created",
@@ -85,6 +91,12 @@ const handleProjectCreated = async ({ project, userId }) => {
  */
 const handleCollaboratorInvited = async ({ projectId, projectName, collaboratorId }) => {
   console.log(`[Listener] Processing COLLABORATOR_INVITED for user ${collaboratorId}`);
+
+  const canSendInApp = await shouldSend(collaboratorId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${collaboratorId} (settings disabled)`);
+    return;
+  }
 
   const notification = await createNotification({
     userId: collaboratorId,
@@ -109,6 +121,18 @@ const handleCollaboratorInvited = async ({ projectId, projectName, collaboratorI
 const handleMessageRequestSent = async ({ request, senderName }) => {
   console.log(`[Listener] Processing MESSAGE_REQUEST_SENT for user ${request.receiverId}`);
 
+  // Send the actual request object for real-time inbox updates (always send this)
+  sendToUser(request.receiverId, {
+    type: "MESSAGE_REQUEST_RECEIVED",
+    data: request,
+  });
+
+  const canSendInApp = await shouldSend(request.receiverId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${request.receiverId} (settings disabled)`);
+    return;
+  }
+
   const notification = await createNotification({
     userId: request.receiverId,
     title: "New Message Request",
@@ -122,12 +146,6 @@ const handleMessageRequestSent = async ({ request, senderName }) => {
     type: "NOTIFICATION",
     data: notification,
   });
-
-  // Send the actual request object for real-time inbox updates
-  sendToUser(request.receiverId, {
-    type: "MESSAGE_REQUEST_RECEIVED",
-    data: request,
-  });
 };
 
 /**
@@ -137,6 +155,18 @@ const handleMessageRequestSent = async ({ request, senderName }) => {
  */
 const handleMessageRequestAccepted = async ({ request, receiverName }) => {
   console.log(`[Listener] Processing MESSAGE_REQUEST_ACCEPTED for user ${request.senderId}`);
+
+  // Send event for real-time chat activation (always send this)
+  sendToUser(request.senderId, {
+    type: "MESSAGE_REQUEST_ACCEPTED",
+    data: request,
+  });
+
+  const canSendInApp = await shouldSend(request.senderId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${request.senderId} (settings disabled)`);
+    return;
+  }
 
   const notification = await createNotification({
     userId: request.senderId,
@@ -151,12 +181,6 @@ const handleMessageRequestAccepted = async ({ request, receiverName }) => {
     type: "NOTIFICATION",
     data: notification,
   });
-
-  // Send event for real-time chat activation
-  sendToUser(request.senderId, {
-    type: "MESSAGE_REQUEST_ACCEPTED",
-    data: request,
-  });
 };
 
 /**
@@ -167,11 +191,17 @@ const handleMessageRequestAccepted = async ({ request, receiverName }) => {
 const handleMessageSent = async ({ message, recipientId, senderName }) => {
   console.log(`[Listener] Processing MESSAGE_SENT for user ${recipientId}`);
 
-  // Send the message payload directly for active chat updates
+  // Send the message payload directly for active chat updates (always send this)
   sendToUser(recipientId, {
     type: "DIRECT_MESSAGE",
     data: message,
   });
+
+  const canSendInApp = await shouldSend(recipientId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${recipientId} (settings disabled)`);
+    return;
+  }
 
   // Create a database notification
   const notification = await createNotification({

@@ -1,6 +1,4 @@
 enum SubscriptionTier {
-  FREE
-  PREMIUM
   BASIC
   ADVANCE
   PRO
@@ -45,7 +43,7 @@ model UserProfile {
   resetToken              String?               @unique
   resetTokenExpiry        DateTime?
   onboardingCompleted     Boolean               @default(false)
-  tier                    SubscriptionTier      @default(FREE)
+  tier                    SubscriptionTier      @default(BASIC)
   twoFactorSecret         String?
   isTwoFactorEnabled      Boolean               @default(false)
   tokenVersion            Int                   @default(0)
@@ -72,23 +70,26 @@ model UserProfile {
   receivedEndorsements Endorsement[] @relation("EndorsementReceiver")
 
   // Audit Logs
-  auditLogs           AuditLog[]
+  auditLogs AuditLog[]
 
   // Subscriptions
   subscription        Subscription?
   invoices            Invoice[]
   savedPaymentMethods SavedPaymentMethod[]
-  auditLogs AuditLog[]
 
   // Wallet & Payments
-  wallet             Wallet?
-  transactions       Transaction[]
-  bankAccounts       BankAccount[]
-  paymentRecords     PaymentRecord[]
+  wallet         Wallet?
+  transactions   Transaction[]
+  bankAccounts   BankAccount[]
+  paymentRecords PaymentRecord[]
+
   // Security & Account
   loginActivities    LoginActivity[]
   dataExportRequests DataExportRequest[]
   supportTickets     SupportTicket[]
+
+  // Notification Settings
+  notificationSetting NotificationSetting?
 }
 
 model UserConnection {
