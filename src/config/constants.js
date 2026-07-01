@@ -30,7 +30,34 @@ const ALLOWED_MIMETYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
+const ACCOUNT_STATUS = {
+  ACTIVE: 'ACTIVE',
+  DEACTIVATED: 'DEACTIVATED',
+  DELETED: 'DELETED',
+};
+
+const LOGIN_STATUS = {
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED',
+};
+
+const DATA_EXPORT_STATUS = {
+  PENDING: 'PENDING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+};
+
+const SUPPORT_TICKET_STATUS = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+};
+
 module.exports = {
   TIER_LIMITS,
   ALLOWED_MIMETYPES,
+  ACCOUNT_STATUS,
+  LOGIN_STATUS,
+  DATA_EXPORT_STATUS,
+  SUPPORT_TICKET_STATUS,
 };

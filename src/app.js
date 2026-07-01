@@ -7,6 +7,7 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
 const { initWebSocket } = require("./config/websocket");
 const { initSubscribers } = require("./events/subscriber");
+require("./jobs/exportQueue"); // Initialize BullMQ export worker
 const userRoutes = require("./modules/users/routes/index");
 const projectRoutes = require("./modules/projects/routes/projects.route");
 const dashboardRoutes = require("./modules/dashboard/routes/dashboard.route");
