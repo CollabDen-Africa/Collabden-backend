@@ -72,6 +72,12 @@ model UserProfile {
   receivedEndorsements Endorsement[] @relation("EndorsementReceiver")
 
   // Audit Logs
+  auditLogs           AuditLog[]
+
+  // Subscriptions
+  subscription        Subscription?
+  invoices            Invoice[]
+  savedPaymentMethods SavedPaymentMethod[]
   auditLogs AuditLog[]
 
   // Wallet & Payments
