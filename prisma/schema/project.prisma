@@ -31,6 +31,7 @@ model Project {
   agreements    LegalAgreement[]
   endorsements  Endorsement[]
   activities    ActivityLog[]
+  escrow        Escrow?
   metadata      Json?                 @default("{}")
   isDeleted     Boolean               @default(false)
   createdAt     DateTime              @default(now())

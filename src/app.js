@@ -15,6 +15,8 @@ const messagingRoutes = require("./modules/messaging/routes/messaging.route");
 const agreementRoutes = require("./routes/agreements");
 const waitlistRoutes = require("./routes/waitlist.route");
 const paymentRoutes = require("./modules/payments/routes/payment.route");
+const escrowRoutes = require("./modules/escrow/routes/escrow.route");
+const { initEscrowAutoRelease } = require("./jobs/escrowAutoRelease");
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +45,7 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/messaging", messagingRoutes);
 app.use("/api/v1/waitlist", waitlistRoutes);
 app.use("/api/v1/payments", paymentRoutes);
+app.use("/api/v1/projects", escrowRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -55,10 +58,13 @@ initWebSocket(server);
 // Initialize Redis event subscribers
 initSubscribers();
 
+// Initialize escrow auto-release scheduler
+initEscrowAutoRelease();
+
 const PORT = process.env.PORT || 5050;
 server.listen(PORT, () => {
   console.log(`Collabden server running on port ${PORT}`);
 });
 
 module.exports = app;
-
+// Trigger restart 2

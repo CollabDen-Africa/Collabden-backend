@@ -65,6 +65,11 @@ model UserProfile {
   transactions        Transaction[]
   bankAccounts        BankAccount[]
   paymentRecords      PaymentRecord[]
+
+  // Escrow
+  escrowAllocations       EscrowAllocation[]
+  escrowActivities        EscrowActivity[]
+  milestoneCollaborators  MilestoneCollaborator[]
 }
 
 model UserConnection {
