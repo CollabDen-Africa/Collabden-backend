@@ -7,6 +7,7 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
 const { initWebSocket } = require("./config/websocket");
 const { initSubscribers } = require("./events/subscriber");
+require("./jobs/exportQueue"); // Initialize BullMQ export worker
 const userRoutes = require("./modules/users/routes/index");
 const projectRoutes = require("./modules/projects/routes/projects.route");
 const dashboardRoutes = require("./modules/dashboard/routes/dashboard.route");
@@ -17,7 +18,8 @@ const waitlistRoutes = require("./routes/waitlist.route");
 const paymentRoutes = require("./modules/payments/routes/payment.route");
 const escrowRoutes = require("./modules/escrow/routes/escrow.route");
 const { initEscrowAutoRelease } = require("./jobs/escrowAutoRelease");
-
+const subscriptionRoutes = require("./modules/subscriptions/routes/subscription.route");
+const notificationSettingRoutes = require("./modules/notifications/routes/notificationSetting.route");
 const app = express();
 const server = http.createServer(app);
 
@@ -42,12 +44,19 @@ app.use("/api/v1/projects", projectRoutes);
 app.use("/api/v1/projects", agreementRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/notification-settings", notificationSettingRoutes);
 app.use("/api/v1/messaging", messagingRoutes);
 app.use("/api/v1/waitlist", waitlistRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/projects", escrowRoutes);
+app.use("/api/v1/subscriptions", subscriptionRoutes);
 
 app.use((err, req, res, next) => {
+  // Handle JSON parsing errors from express.json()
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ message: "Invalid JSON payload format." });
+  }
+
   console.error(err.stack);
   res.status(500).json({ error: "Something went wrong" });
 });

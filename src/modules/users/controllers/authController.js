@@ -29,7 +29,11 @@ const AuthController = {
   }),
   Login: catchAsync(async (req, res) => {
     try {
-      const loginUser = await userLoginService(req.body);
+      const loginUser = await userLoginService({
+        ...req.body,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+      });
       return res.status(200).json({
         message: "User logged in successfully",
         data: loginUser,
