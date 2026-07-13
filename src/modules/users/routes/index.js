@@ -5,6 +5,7 @@ const userAgreementsRoutes = require('./userAgreements.route')
 const userSecurityRoutes = require("./security.route");
 const userPersonaRoutes = require("./persona.route");
 const userProfileRoutes = require("./profile.route");
+const collaboratorRoutes = require("./collaborator.route");
 const router = Router()
 
 
@@ -14,6 +15,7 @@ router.use('/agreements', userAgreementsRoutes)
 router.use("/profile", userProfileRoutes);
 router.use("/security", userSecurityRoutes);
 router.use("/persona", userPersonaRoutes);
+router.use("/collaborators", collaboratorRoutes);
 
 
 module.exports = router;

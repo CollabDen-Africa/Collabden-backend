@@ -1,4 +1,6 @@
 const prisma = require("../../../config/prismaClient");
+const { publishEvent } = require("../../../events/publisher");
+const EVENT_TYPES = require("../../../events/eventTypes");
 
 const sendConnectionRequest = async (senderId, receiverId) => {
   if (senderId === receiverId) {
@@ -28,13 +30,21 @@ const sendConnectionRequest = async (senderId, receiverId) => {
     throw new Error("A connection request is already pending.");
   }
 
-  return await prisma.userConnection.create({
+  const connection = await prisma.userConnection.create({
     data: {
       senderId,
       receiverId,
       status: "PENDING",
     },
   });
+
+  await publishEvent(EVENT_TYPES.CONNECTION_REQUEST_SENT, {
+    senderId,
+    receiverId,
+    connectionId: connection.id,
+  });
+
+  return connection;
 };
 
 const respondToConnectionRequest = async (connectionId, userId, status) => {
@@ -50,10 +60,20 @@ const respondToConnectionRequest = async (connectionId, userId, status) => {
     throw new Error("Invalid status. Must be ACCEPTED or REJECTED.");
   }
 
-  return await prisma.userConnection.update({
+  const updatedConnection = await prisma.userConnection.update({
     where: { id: connectionId },
     data: { status },
   });
+
+  if (status === "ACCEPTED") {
+    await publishEvent(EVENT_TYPES.CONNECTION_REQUEST_ACCEPTED, {
+      senderId: updatedConnection.senderId,
+      receiverId: userId,
+      connectionId: updatedConnection.id,
+    });
+  }
+
+  return updatedConnection;
 };
 
 const getConnections = async (userId) => {

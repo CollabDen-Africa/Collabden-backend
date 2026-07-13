@@ -2,6 +2,8 @@ const EVENT_TYPES = require("../eventTypes");
 const { createNotification } = require("../../modules/notifications/services/notification.service");
 const { shouldSend } = require("../../modules/notifications/services/notificationSetting.service");
 const { sendToUser } = require("../../config/websocket");
+const prisma = require("../../config/prismaClient");
+
 /**
  * Register all notification-related event listeners on the Redis subscriber.
  * @param {import("ioredis").Redis} subscriberClient
@@ -14,6 +16,9 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.MESSAGE_REQUEST_SENT,
     EVENT_TYPES.MESSAGE_REQUEST_ACCEPTED,
     EVENT_TYPES.MESSAGE_SENT,
+    EVENT_TYPES.CONNECTION_REQUEST_SENT,
+    EVENT_TYPES.CONNECTION_REQUEST_ACCEPTED,
+    EVENT_TYPES.AVAILABILITY_STATUS_UPDATED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe:", err.message);
@@ -44,6 +49,18 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.MESSAGE_SENT:
           await handleMessageSent(payload);
+          break;
+
+        case EVENT_TYPES.CONNECTION_REQUEST_SENT:
+          await handleConnectionRequestSent(payload);
+          break;
+
+        case EVENT_TYPES.CONNECTION_REQUEST_ACCEPTED:
+          await handleConnectionRequestAccepted(payload);
+          break;
+
+        case EVENT_TYPES.AVAILABILITY_STATUS_UPDATED:
+          await handleAvailabilityStatusUpdated(payload);
           break;
 
         default:
@@ -214,6 +231,108 @@ const handleMessageSent = async ({ message, recipientId, senderName }) => {
 
   // Send real-time notification alert
   sendToUser(recipientId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
+/**
+ * Handle CONNECTION_REQUEST_SENT event:
+ * - Create a notification for the receiver
+ * - Push real-time notification via WebSocket
+ */
+const handleConnectionRequestSent = async ({ senderId, receiverId, connectionId }) => {
+  console.log(`[Listener] Processing CONNECTION_REQUEST_SENT for user ${receiverId}`);
+
+  // Fetch sender profile details to display their name
+  const sender = await prisma.userProfile.findUnique({
+    where: { id: senderId },
+    select: { displayName: true, firstName: true, lastName: true },
+  });
+  const senderName = sender ? (sender.displayName || `${sender.firstName} ${sender.lastName}`) : "A collaborator";
+
+  const canSendInApp = await shouldSend(receiverId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${receiverId} (settings disabled)`);
+    return;
+  }
+
+  const notification = await createNotification({
+    userId: receiverId,
+    title: "New Connection Request",
+    message: `${senderName} sent you a connection request.`,
+    type: "CONNECTION_REQUEST",
+    link: `/profile/connections`,
+  });
+
+  // Push real-time notification to the receiver
+  sendToUser(receiverId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
+/**
+ * Handle CONNECTION_REQUEST_ACCEPTED event:
+ * - Create a notification for the sender
+ * - Push real-time notification via WebSocket
+ */
+const handleConnectionRequestAccepted = async ({ senderId, receiverId, connectionId }) => {
+  console.log(`[Listener] Processing CONNECTION_REQUEST_ACCEPTED for user ${senderId}`);
+
+  // Fetch receiver profile details (who accepted) to display their name
+  const receiver = await prisma.userProfile.findUnique({
+    where: { id: receiverId },
+    select: { displayName: true, firstName: true, lastName: true },
+  });
+  const receiverName = receiver ? (receiver.displayName || `${receiver.firstName} ${receiver.lastName}`) : "A collaborator";
+
+  const canSendInApp = await shouldSend(senderId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${senderId} (settings disabled)`);
+    return;
+  }
+
+  const notification = await createNotification({
+    userId: senderId,
+    title: "Connection Request Accepted",
+    message: `${receiverName} accepted your connection request.`,
+    type: "CONNECTION_REQUEST",
+    link: `/profile/${receiverId}`,
+  });
+
+  // Push real-time notification to the sender
+  sendToUser(senderId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
+/**
+ * Handle AVAILABILITY_STATUS_UPDATED event:
+ * - Create a notification for the user themselves
+ * - Push real-time notification via WebSocket
+ */
+const handleAvailabilityStatusUpdated = async ({ userId, openToCollaborate }) => {
+  console.log(`[Listener] Processing AVAILABILITY_STATUS_UPDATED for user ${userId}`);
+
+  const canSendInApp = await shouldSend(userId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${userId} (settings disabled)`);
+    return;
+  }
+
+  const statusText = openToCollaborate ? "Open to Collaborate" : "Not Open to Collaborate";
+  const notification = await createNotification({
+    userId,
+    title: "Availability Status Updated",
+    message: `Your availability status is now set to "${statusText}".`,
+    type: "STATUS_UPDATE",
+    link: `/profile/settings`,
+  });
+
+  // Push real-time notification to the user
+  sendToUser(userId, {
     type: "NOTIFICATION",
     data: notification,
   });
