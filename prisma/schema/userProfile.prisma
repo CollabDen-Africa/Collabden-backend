@@ -87,11 +87,6 @@ model UserProfile {
   escrowAllocations       EscrowAllocation[]
   escrowActivities        EscrowActivity[]
   milestoneCollaborators  MilestoneCollaborator[]
-  wallet         Wallet?
-  transactions   Transaction[]
-  bankAccounts   BankAccount[]
-  paymentRecords PaymentRecord[]
-
   // Security & Account
   loginActivities    LoginActivity[]
   dataExportRequests DataExportRequest[]
