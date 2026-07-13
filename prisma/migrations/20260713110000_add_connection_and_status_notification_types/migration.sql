@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'CONNECTION_REQUEST';
+ALTER TYPE "NotificationType" ADD VALUE 'STATUS_UPDATE';
