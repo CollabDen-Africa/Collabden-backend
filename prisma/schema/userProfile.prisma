@@ -78,6 +78,15 @@ model UserProfile {
   savedPaymentMethods SavedPaymentMethod[]
 
   // Wallet & Payments
+  wallet              Wallet?
+  transactions        Transaction[]
+  bankAccounts        BankAccount[]
+  paymentRecords      PaymentRecord[]
+
+  // Escrow
+  escrowAllocations       EscrowAllocation[]
+  escrowActivities        EscrowActivity[]
+  milestoneCollaborators  MilestoneCollaborator[]
   wallet         Wallet?
   transactions   Transaction[]
   bankAccounts   BankAccount[]

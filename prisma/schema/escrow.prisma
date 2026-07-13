@@ -1,0 +1,146 @@
+// ─── Escrow Enums ───────────────────────────────────────────────────────────
+
+enum EscrowStatus {
+  PENDING_FUNDING
+  FUNDED
+  LOCKED
+  COMPLETED
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  AWAITING_REVIEW
+  APPROVED
+  PAYMENT_RELEASED
+  DISPUTED
+}
+
+enum EscrowApprovalStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+// ─── Escrow ─────────────────────────────────────────────────────────────────
+// Top-level escrow configuration for a project.
+// One escrow per project. Holds the total amount, status, and review period.
+// Linked to a signed LegalAgreement for dispute resolution and audit.
+
+model Escrow {
+  id                String           @id @default(cuid())
+  projectId         String           @unique
+  agreementId       String
+  totalAmount       Decimal          @db.Decimal(12, 2)
+  fundedAmount      Decimal          @default(0) @db.Decimal(12, 2)
+  releasedAmount    Decimal          @default(0) @db.Decimal(12, 2)
+  status            EscrowStatus     @default(PENDING_FUNDING)
+  reviewPeriodDays  Int              @default(7)
+  fundingReference  String?          @unique
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agreement         LegalAgreement   @relation(fields: [agreementId], references: [id])
+  milestones        EscrowMilestone[]
+  allocations       EscrowAllocation[]
+  activities        EscrowActivity[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// ─── EscrowMilestone ────────────────────────────────────────────────────────
+// Individual payment milestones within an escrow.
+// A milestone can be tied to multiple collaborators via the MilestoneCollaborator
+// junction table. When the milestone is approved, EACH linked collaborator
+// receives the full milestone amount (e.g. $10k milestone × 3 collaborators = $30k total).
+
+model EscrowMilestone {
+  id               String          @id @default(cuid())
+  escrowId         String
+  title            String
+  description      String?
+  amount           Decimal         @db.Decimal(12, 2)
+  status           MilestoneStatus @default(PENDING)
+  dueDate          DateTime?
+  submittedAt      DateTime?
+  reviewDeadline   DateTime?
+  approvedAt       DateTime?
+  evidence         Json?           @default("{}") // { files: [], links: [], documents: [], comment: "" }
+  disputeReason    String?
+  disputeResolution String?
+  isAutoReleased   Boolean         @default(false)
+  escrow           Escrow          @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  collaborators    MilestoneCollaborator[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([escrowId])
+  @@index([status])
+  @@index([reviewDeadline])
+}
+
+// ─── MilestoneCollaborator ──────────────────────────────────────────────────
+// Junction table linking milestones to collaborators.
+// Each record tracks an individual collaborator's payment status for a milestone.
+// When a milestone is approved, each collaborator receives the full milestone amount.
+
+model MilestoneCollaborator {
+  id               String          @id @default(cuid())
+  milestoneId      String
+  userId           String
+  paymentReference String?         @unique
+  releasedAt       DateTime?
+  milestone        EscrowMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  user             UserProfile     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime        @default(now())
+
+  @@unique([milestoneId, userId])
+  @@index([milestoneId])
+  @@index([userId])
+}
+
+// ─── EscrowAllocation ───────────────────────────────────────────────────────
+// Per-collaborator escrow summary within an escrow.
+// Tracks the total allocated amount (derived from milestones), released amount,
+// and the collaborator's approval of the escrow terms.
+
+model EscrowAllocation {
+  id               String               @id @default(cuid())
+  escrowId         String
+  collaboratorId   String
+  userId           String
+  totalAmount      Decimal              @db.Decimal(12, 2)
+  releasedAmount   Decimal              @default(0) @db.Decimal(12, 2)
+  approvalStatus   EscrowApprovalStatus @default(PENDING)
+  approvalComment  String?
+  approvedAt       DateTime?
+  escrow           Escrow               @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  user             UserProfile          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([escrowId, userId])
+  @@index([escrowId])
+  @@index([userId])
+}
+
+// ─── EscrowActivity ─────────────────────────────────────────────────────────
+// Immutable audit log recording all escrow actions: status changes, approvals,
+// disputes, releases, and auto-release events.
+
+model EscrowActivity {
+  id        String   @id @default(cuid())
+  escrowId  String
+  userId    String?
+  action    String
+  details   String?
+  metadata  Json?    @default("{}")
+  escrow    Escrow   @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  user      UserProfile? @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([escrowId])
+}
