@@ -90,7 +90,11 @@ const AuthController = {
   forgotPassword: catchAsync(async (req, res) => {
     try {
       const { email } = req.body;
-      const result = await forgotPasswordService(email);
+      const result = await forgotPasswordService(
+        email,
+        req.ip || req.connection?.remoteAddress,
+        req.headers['user-agent']
+      );
       return res.status(200).json({
         message: result.message,
       });
@@ -101,7 +105,12 @@ const AuthController = {
   resetPassword: catchAsync(async (req, res) => {
     try {
       const { resetToken, newPassword } = req.body;
-      const result = await resetPasswordService(resetToken, newPassword);
+      const result = await resetPasswordService(
+        resetToken, 
+        newPassword,
+        req.ip || req.connection?.remoteAddress,
+        req.headers['user-agent']
+      );
       return res.status(200).json({
         message: result.message,
       });

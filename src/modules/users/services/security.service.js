@@ -41,10 +41,19 @@ const verify2FASetupService = async (userId, token) => {
   return { message: "2FA successfully enabled" };
 };
 
-const logoutAllDevicesService = async (userId) => {
+const logoutAllDevicesService = async (userId, ipAddress, userAgent) => {
   await prisma.userProfile.update({
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId,
+      action: "LOGOUT_ALL_DEVICES",
+      ipAddress,
+      userAgent,
+    },
   });
 
   return { message: "Successfully logged out from all devices" };

@@ -2,7 +2,9 @@ model AuditLog {
   id        String   @id @default(cuid())
   userId    String
   action    String
-  changes   Json
+  changes   Json?
+  ipAddress String?
+  userAgent String?
   createdAt DateTime @default(now())
 
   user UserProfile @relation(fields: [userId], references: [id])
