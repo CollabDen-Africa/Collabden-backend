@@ -11,7 +11,7 @@ const authMiddleware = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await prisma.userProfile.findUnique({
       where: { id: decoded.id },
-      select: { tokenVersion: true, accountStatus: true },
+      select: { tokenVersion: true, accountStatus: true, lastActiveAt: true },
     });
     if (!user) {
       return res.status(401).json({ message: "User not found" });
@@ -19,6 +19,17 @@ const authMiddleware = async (req, res, next) => {
 
     if (user.accountStatus !== ACCOUNT_STATUS.ACTIVE) {
       return res.status(401).json({ message: "Account is not active" });
+    }
+
+    // Check inactivity timeout (30 minutes)
+    const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+    if (user.lastActiveAt && (Date.now() - user.lastActiveAt.getTime() > INACTIVITY_TIMEOUT_MS)) {
+      // Invalidate all sessions by bumping tokenVersion
+      await prisma.userProfile.update({
+        where: { id: decoded.id },
+        data: { tokenVersion: { increment: 1 } }
+      });
+      return res.status(401).json({ message: "Session timed out due to inactivity. Please log in again" });
     }
 
     // For backward compatibility, decoded.tokenVersion might be undefined for old tokens.
@@ -31,6 +42,12 @@ const authMiddleware = async (req, res, next) => {
         .status(401)
         .json({ message: "Session expired. Please log in again" });
     }
+
+    // Update lastActiveAt to keep session alive
+    await prisma.userProfile.update({
+      where: { id: decoded.id },
+      data: { lastActiveAt: new Date() }
+    });
 
     req.user = decoded;
     next();
