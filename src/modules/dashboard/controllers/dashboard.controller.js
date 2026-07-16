@@ -1,4 +1,4 @@
-const { getUserDashboardData } = require("../services/dashboard.service");
+const { getUserDashboardData, getAdminDashboardData: getAdminData } = require("../services/dashboard.service");
 
 const getDashboardData = async (req, res) => {
   try {
@@ -14,6 +14,16 @@ const getDashboardData = async (req, res) => {
   }
 };
 
+const getAdminDashboardData = async (req, res) => {
+  try {
+    const data = await getAdminData();
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getDashboardData,
+  getAdminDashboardData,
 };
