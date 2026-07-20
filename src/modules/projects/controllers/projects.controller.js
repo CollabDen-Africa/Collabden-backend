@@ -7,12 +7,14 @@ const {
   deleteProjectService,
   removeCollaboratorService,
   getProjectMetadataService,
+  getMarketplaceProjectsService,
+  getMarketplaceProjectSummaryService,
 } = require("../services/projects.service");
 const { PROJECT_VISIBILITY } = require("../../../utils/constants");
 
 const createProject = async (req, res) => {
   try {
-    const { name, description, genre, startDate, visibility, collaboratorIds } = req.body;
+    const { name, description, genre, startDate, visibility, collaboratorIds, openToCollaborators, requiredRoles, requiredSkills } = req.body;
     const userId = req.user.id;
 
     if (!name || !genre || !startDate) {
@@ -31,6 +33,9 @@ const createProject = async (req, res) => {
       startDate,
       visibility,
       collaboratorIds,
+      openToCollaborators,
+      requiredRoles,
+      requiredSkills,
     });
 
     res.status(201).json({
@@ -90,7 +95,7 @@ const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { name, description, genre, startDate, visibility } = req.body;
+    const { name, description, genre, startDate, visibility, openToCollaborators, requiredRoles, requiredSkills } = req.body;
 
     const project = await updateProjectService(id, userId, {
       name,
@@ -98,6 +103,9 @@ const updateProject = async (req, res) => {
       genre,
       startDate: startDate ? new Date(startDate) : undefined,
       visibility,
+      openToCollaborators,
+      requiredRoles,
+      requiredSkills,
     });
 
     res.status(200).json({
@@ -145,6 +153,38 @@ const getProjectMetadata = async (req, res) => {
 };
 
 
+const getMarketplace = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { page, limit, genre, role, requirements, search, startDate, endDate, sortBy, sortOrder } = req.query;
+    const data = await getMarketplaceProjectsService(userId, {
+      page,
+      limit,
+      genre,
+      role,
+      requirements,
+      search,
+      startDate,
+      endDate,
+      sortBy,
+      sortOrder,
+    });
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getMarketplaceSummary = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await getMarketplaceProjectSummaryService(id);
+    res.status(200).json(project);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -154,4 +194,6 @@ module.exports = {
   deleteProject,
   removeCollaborator,
   getProjectMetadata,
+  getMarketplace,
+  getMarketplaceSummary,
 }

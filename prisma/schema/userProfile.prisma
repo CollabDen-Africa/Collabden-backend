@@ -94,6 +94,10 @@ model UserProfile {
 
   // Notification Settings
   notificationSetting NotificationSetting?
+
+  // Project Applications
+  applications        ProjectApplication[]
+  sentAppMessages     ApplicationMessage[]
 }
 
 model UserConnection {

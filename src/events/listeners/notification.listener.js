@@ -19,6 +19,8 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.CONNECTION_REQUEST_SENT,
     EVENT_TYPES.CONNECTION_REQUEST_ACCEPTED,
     EVENT_TYPES.AVAILABILITY_STATUS_UPDATED,
+    EVENT_TYPES.PROJECT_APPLICATION_SUBMITTED,
+    EVENT_TYPES.PROJECT_APPLICATION_STATUS_CHANGED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe:", err.message);
@@ -61,6 +63,14 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.AVAILABILITY_STATUS_UPDATED:
           await handleAvailabilityStatusUpdated(payload);
+          break;
+
+        case EVENT_TYPES.PROJECT_APPLICATION_SUBMITTED:
+          await handleProjectApplicationSubmitted(payload);
+          break;
+
+        case EVENT_TYPES.PROJECT_APPLICATION_STATUS_CHANGED:
+          await handleProjectApplicationStatusChanged(payload);
           break;
 
         default:
@@ -333,6 +343,64 @@ const handleAvailabilityStatusUpdated = async ({ userId, openToCollaborate }) =>
 
   // Push real-time notification to the user
   sendToUser(userId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
+/**
+ * Handle PROJECT_APPLICATION_SUBMITTED event:
+ * - Send notification to Project Owner
+ * - Push real-time notification via WebSocket
+ */
+const handleProjectApplicationSubmitted = async ({ applicationId, projectId, projectName, ownerId, applicantName }) => {
+  console.log(`[Listener] Processing PROJECT_APPLICATION_SUBMITTED for project ${projectId} owner ${ownerId}`);
+
+  const canSendInApp = await shouldSend(ownerId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for owner ${ownerId} (settings disabled)`);
+    return;
+  }
+
+  const notification = await createNotification({
+    userId: ownerId,
+    title: "New Project Application",
+    message: `${applicantName} has applied to join your project "${projectName}".`,
+    type: "APPLICATION_SUBMITTED",
+    link: `/projects/${projectId}/applications`,
+  });
+
+  // Push real-time notification to the project owner
+  sendToUser(ownerId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
+/**
+ * Handle PROJECT_APPLICATION_STATUS_CHANGED event:
+ * - Send notification to Applicant
+ * - Push real-time notification via WebSocket
+ */
+const handleProjectApplicationStatusChanged = async ({ applicationId, projectId, projectName, applicantId, status }) => {
+  console.log(`[Listener] Processing PROJECT_APPLICATION_STATUS_CHANGED for applicant ${applicantId} status ${status}`);
+
+  const canSendInApp = await shouldSend(applicantId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for applicant ${applicantId} (settings disabled)`);
+    return;
+  }
+
+  const notification = await createNotification({
+    userId: applicantId,
+    title: "Project Application Update",
+    message: `Your application to join "${projectName}" has been ${status.toLowerCase()}.`,
+    type: "APPLICATION_STATUS_CHANGED",
+    link: status === "ACCEPTED" ? `/projects/${projectId}` : `/projects/applications`,
+  });
+
+  // Push real-time notification to the applicant
+  sendToUser(applicantId, {
     type: "NOTIFICATION",
     data: notification,
   });
