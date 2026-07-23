@@ -28,6 +28,9 @@ const createProjectService = async ({
   startDate,
   visibility,
   collaboratorIds = [],
+  openToCollaborators = false,
+  requiredRoles = [],
+  requiredSkills = [],
 }) => {
   // Fetch user profile for tier check
   const user = await prisma.userProfile.findUnique({
@@ -81,6 +84,9 @@ const createProjectService = async ({
     startDate: new Date(startDate),
     visibility,
     ownerId: userId,
+    openToCollaborators,
+    requiredRoles,
+    requiredSkills,
     collaborators: {
       create: [
         {
@@ -529,6 +535,128 @@ const getProjectMetadataService = async (projectId) => {
   };
 };
 
+const getMarketplaceProjectsService = async (userId, filters = {}) => {
+  const {
+    page = 1,
+    limit = 10,
+    genre,
+    role,
+    requirements,
+    search,
+    startDate,
+    endDate,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+  } = filters;
+
+  const skip = (Math.max(1, parseInt(page) || 1) - 1) * Math.min(100, Math.max(1, parseInt(limit) || 10));
+  const take = Math.min(100, Math.max(1, parseInt(limit) || 10));
+
+  const where = {
+    isDeleted: false,
+    visibility: "PUBLIC",
+    openToCollaborators: true,
+    AND: [],
+  };
+
+  if (genre) {
+    where.genre = { contains: genre, mode: 'insensitive' };
+  }
+
+  if (role) {
+    where.requiredRoles = { has: role };
+  }
+
+  if (requirements) {
+    where.requiredSkills = { has: requirements };
+  }
+
+  if (search) {
+    where.AND.push({
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  if (startDate) {
+    where.startDate = { gte: new Date(startDate) };
+  }
+
+  if (endDate) {
+    where.endDate = { lte: new Date(endDate) };
+  }
+
+  const allowedSortFields = ['createdAt', 'updatedAt', 'name', 'startDate'];
+  const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+  const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) ? sortOrder.toLowerCase() : 'desc';
+
+  const total = await prisma.project.count({ where });
+
+  const projects = await prisma.project.findMany({
+    where,
+    include: {
+      owner: {
+        select: {
+          id: true,
+          displayName: true,
+          email: true,
+          avatarUrl: true,
+          tier: true,
+        },
+      },
+      _count: {
+        select: {
+          collaborators: true,
+          applications: true,
+        },
+      },
+    },
+    orderBy: { [validSortBy]: validSortOrder },
+    skip,
+    take,
+  });
+
+  return {
+    projects,
+    meta: {
+      total,
+      page: parseInt(page),
+      limit: take,
+      totalPages: Math.ceil(total / take),
+    },
+  };
+};
+
+const getMarketplaceProjectSummaryService = async (projectId) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          displayName: true,
+          email: true,
+          avatarUrl: true,
+          tier: true,
+        },
+      },
+      _count: {
+        select: {
+          collaborators: true,
+        },
+      },
+    },
+  });
+
+  if (!project || project.isDeleted || project.visibility !== "PUBLIC" || !project.openToCollaborators) {
+    throw new Error("Project summary not found, is private, or not open to collaborators.");
+  }
+
+  return project;
+};
+
 module.exports = {
   createProjectService,
   getProjectListService,
@@ -538,4 +666,6 @@ module.exports = {
   deleteProjectService,
   removeCollaboratorService,
   getProjectMetadataService,
+  getMarketplaceProjectsService,
+  getMarketplaceProjectSummaryService,
 };
