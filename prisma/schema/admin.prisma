@@ -1,0 +1,48 @@
+enum AdminRole {
+  SUPER_ADMIN
+  SUPPORT_ADMIN
+  FINANCE_ADMIN
+  VERIFICATION_ADMIN
+  MARKETPLACE_MODERATOR
+}
+
+model AdminUser {
+  id                  String        @id @default(cuid())
+  email               String        @unique
+  password            String
+  role                AdminRole     @default(SUPPORT_ADMIN)
+  
+  // Session Security
+  tokenVersion        Int           @default(0)
+  accountStatus       AccountStatus @default(ACTIVE)
+  failedLoginAttempts Int           @default(0)
+  lockoutUntil        DateTime?
+  lastActiveAt        DateTime      @default(now())
+  
+  // Password Reset
+  resetToken          String?       @unique
+  resetTokenExpiry    DateTime?
+
+  // Two-Factor Authentication
+  isTwoFactorEnabled  Boolean       @default(true)
+  twoFactorCode       String?
+  twoFactorCodeExpiry DateTime?
+
+  // Audit Logs
+  adminAuditLogs      AdminAuditLog[]
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  admin AdminUser @relation(fields: [adminId], references: [id])
+}

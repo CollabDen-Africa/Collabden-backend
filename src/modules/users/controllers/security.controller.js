@@ -24,7 +24,11 @@ const verify2FASetup = async (req, res, next) => {
 const logoutAllDevices = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const result = await securityService.logoutAllDevicesService(userId);
+    const result = await securityService.logoutAllDevicesService(
+      userId,
+      req.ip || req.connection?.remoteAddress,
+      req.headers['user-agent']
+    );
     res.status(200).json(result);
   } catch (error) {
     next(error);

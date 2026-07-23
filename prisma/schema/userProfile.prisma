@@ -23,7 +23,6 @@ model UserProfile {
   password                String?
   googleId                String?               @unique
   isVerified              Boolean               @default(false)
-  isAdmin                 Boolean               @default(false)
   identityVerified        Boolean               @default(false)
   legalName               String?
   displayName             String?
@@ -48,6 +47,9 @@ model UserProfile {
   isTwoFactorEnabled      Boolean               @default(false)
   tokenVersion            Int                   @default(0)
   accountStatus           AccountStatus         @default(ACTIVE)
+  failedLoginAttempts     Int                   @default(0)
+  lockoutUntil            DateTime?
+  lastActiveAt            DateTime              @default(now())
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   ownedProjects           Project[]             @relation("ProjectOwner")
@@ -95,9 +97,12 @@ model UserProfile {
   // Notification Settings
   notificationSetting NotificationSetting?
 
-  // Project Applications
-  applications        ProjectApplication[]
-  sentAppMessages     ApplicationMessage[]
+  // Administrative Actions
+  identityVerificationRequests IdentityVerificationRequest[]
+  disputesFiled       Dispute[] @relation("DisputeReporter")
+  disputesAgainst     Dispute[] @relation("DisputeReportedUser")
+  reportsFiled        Report[]  @relation("ReportReporter")
+  reportsAgainst      Report[]  @relation("ReportReportedUser")
 }
 
 model UserConnection {

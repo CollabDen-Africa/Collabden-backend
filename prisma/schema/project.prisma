@@ -40,6 +40,10 @@ model Project {
   isDeleted     Boolean               @default(false)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
+
+  // Administrative Actions
+  disputes      Dispute[]
+  reports       Report[]
 }
 
 model ProjectCollaborator {

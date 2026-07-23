@@ -76,6 +76,46 @@ const userLoginService = async ({
     throw new Error("User not found");
   }
 
+  // Lockout check
+  if (user.lockoutUntil && new Date() < user.lockoutUntil) {
+    const minutesLeft = Math.ceil(
+      (user.lockoutUntil.getTime() - Date.now()) / 60000
+    );
+    throw new Error(
+      `Account is locked due to too many failed attempts. Try again in ${minutesLeft} minutes`
+    );
+  }
+
+  // Helper for failed logins
+  const handleFailedLogin = async () => {
+    const newAttempts = user.failedLoginAttempts + 1;
+    let lockoutUntil = null;
+    if (newAttempts >= 5) {
+      lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
+    }
+    await prisma.userProfile.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: newAttempts, lockoutUntil },
+    });
+    await prisma.loginActivity.create({
+      data: {
+        userId: user.id,
+        ipAddress: ipAddress || "",
+        userAgent: userAgent || "",
+        status: LOGIN_STATUS.FAILED,
+      },
+    });
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: lockoutUntil ? "ACCOUNT_LOCKED" : "LOGIN_FAILED",
+        changes: { reason: "Invalid credentials or 2FA code" },
+        ipAddress,
+        userAgent,
+      },
+    });
+  };
+
   // Deactivated/Deleted check
   if (user.accountStatus === ACCOUNT_STATUS.DEACTIVATED) {
     throw new Error("Account is deactivated");
@@ -93,15 +133,7 @@ const userLoginService = async ({
   const isPasswordValid = await bcrypt.compare(password, user.password);
 
   if (!isPasswordValid) {
-    // Log failed activity
-    await prisma.loginActivity.create({
-      data: {
-        userId: user.id,
-        ipAddress: ipAddress || "",
-        userAgent: userAgent || "",
-        status: LOGIN_STATUS.FAILED,
-      },
-    });
+    await handleFailedLogin();
     throw new Error("Invalid password");
   }
 
@@ -116,17 +148,20 @@ const userLoginService = async ({
       secret: user.twoFactorSecret,
     }).valid;
     if (!isValidCode) {
-      await prisma.loginActivity.create({
-        data: {
-          userId: user.id,
-          ipAddress: ipAddress || "",
-          userAgent: userAgent || "",
-          status: LOGIN_STATUS.FAILED,
-        },
-      });
+      await handleFailedLogin();
       throw new Error("Invalid 2FA code");
     }
   }
+
+  // Reset failed login attempts and update activity
+  await prisma.userProfile.update({
+    where: { id: user.id },
+    data: {
+      failedLoginAttempts: 0,
+      lockoutUntil: null,
+      lastActiveAt: new Date(),
+    },
+  });
 
   // Log successful activity
   await prisma.loginActivity.create({
@@ -135,6 +170,15 @@ const userLoginService = async ({
       ipAddress: ipAddress || "",
       userAgent: userAgent || "",
       status: LOGIN_STATUS.SUCCESS,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "LOGIN_SUCCESS",
+      ipAddress,
+      userAgent,
     },
   });
 
@@ -222,7 +266,7 @@ const resendVerificationEmailService = async (email) => {
   return { message: "Verification code resent successfully" };
 };
 
-const forgotPasswordService = async (email) => {
+const forgotPasswordService = async (email, ipAddress, userAgent) => {
   const normalizedEmail = email?.toLowerCase();
 
   const user = await prisma.userProfile.findUnique({
@@ -256,10 +300,19 @@ const forgotPasswordService = async (email) => {
     html: emailTemplate.html,
   });
 
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "PASSWORD_RESET_REQUESTED",
+      ipAddress,
+      userAgent,
+    },
+  });
+
   return { message: "Password reset link sent to your email" };
 };
 
-const resetPasswordService = async (resetToken, newPassword) => {
+const resetPasswordService = async (resetToken, newPassword, ipAddress, userAgent) => {
   const user = await prisma.userProfile.findUnique({
     where: { resetToken },
   });
@@ -283,6 +336,15 @@ const resetPasswordService = async (resetToken, newPassword) => {
       password: hashedPassword,
       resetToken: null,
       resetTokenExpiry: null,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "PASSWORD_RESET_COMPLETED",
+      ipAddress,
+      userAgent,
     },
   });
 

@@ -1,3 +1,11 @@
+const { 
+  AccountStatus, 
+  ProjectStatus, 
+  SupportTicketStatus, 
+  IdentityVerificationStatus, 
+  DisputeStatus, 
+  ReportStatus 
+} = require("@prisma/client");
 const prisma = require("../../../config/prismaClient");
 
 const getUserDashboardData = async (userId) => {
@@ -14,7 +22,7 @@ const getUserDashboardData = async (userId) => {
           },
         },
       ],
-      status: "ACTIVE",
+      status: ProjectStatus.ACTIVE,
     },
     include: {
       owner: {
@@ -46,6 +54,43 @@ const getUserDashboardData = async (userId) => {
   };
 };
 
+const getAdminDashboardData = async () => {
+  const [
+    totalUsers,
+    activeUsers,
+    totalProjects,
+    activeProjects,
+    openTickets,
+    identityVerificationRequests,
+    openDisputes,
+    reportedItems
+  ] = await Promise.all([
+    prisma.userProfile.count(),
+    prisma.userProfile.count({ where: { accountStatus: AccountStatus.ACTIVE } }),
+    prisma.project.count({ where: { isDeleted: false } }),
+    prisma.project.count({ where: { status: ProjectStatus.ACTIVE, isDeleted: false } }),
+    prisma.supportTicket.count({ where: { status: SupportTicketStatus.OPEN } }),
+    prisma.identityVerificationRequest.count({ where: { status: IdentityVerificationStatus.PENDING } }),
+    prisma.dispute.count({ where: { status: DisputeStatus.OPEN } }),
+    prisma.report.count({ where: { status: ReportStatus.OPEN } }),
+  ]);
+
+  return {
+    totalUsers,
+    activeUsers,
+    totalProjects,
+    activeProjects,
+    pendingActions: {
+      identityVerificationRequests,
+      openDisputes,
+      supportTickets: openTickets,
+      reportedItems,
+    }
+  };
+};
+
 module.exports = {
   getUserDashboardData,
+  getAdminDashboardData,
 };
+

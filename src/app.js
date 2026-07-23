@@ -20,6 +20,7 @@ const escrowRoutes = require("./modules/escrow/routes/escrow.route");
 const { initEscrowAutoRelease } = require("./jobs/escrowAutoRelease");
 const subscriptionRoutes = require("./modules/subscriptions/routes/subscription.route");
 const notificationSettingRoutes = require("./modules/notifications/routes/notificationSetting.route");
+const adminAuthRoutes = require("./modules/admin/routes/adminAuth.route");
 const app = express();
 const server = http.createServer(app);
 
@@ -58,6 +59,7 @@ app.use("/api/v1/waitlist", waitlistRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/projects", escrowRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
+app.use("/api/v1/admin/auth", adminAuthRoutes);
 
 app.use((err, req, res, next) => {
   // Handle JSON parsing errors from express.json()
