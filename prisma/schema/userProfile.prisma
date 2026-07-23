@@ -103,6 +103,10 @@ model UserProfile {
   disputesAgainst     Dispute[] @relation("DisputeReportedUser")
   reportsFiled        Report[]  @relation("ReportReporter")
   reportsAgainst      Report[]  @relation("ReportReportedUser")
+
+  // Project Applications
+  applications        ProjectApplication[]
+  sentAppMessages     ApplicationMessage[]
 }
 
 model UserConnection {
