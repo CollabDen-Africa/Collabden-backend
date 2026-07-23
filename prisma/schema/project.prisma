@@ -32,6 +32,10 @@ model Project {
   endorsements  Endorsement[]
   activities    ActivityLog[]
   escrow        Escrow?
+  openToCollaborators Boolean               @default(false)
+  requiredRoles       String[]
+  requiredSkills      String[]
+  applications        ProjectApplication[]
   metadata      Json?                 @default("{}")
   isDeleted     Boolean               @default(false)
   createdAt     DateTime              @default(now())
