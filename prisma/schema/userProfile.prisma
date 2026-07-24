@@ -109,10 +109,7 @@ model UserProfile {
   // Project Applications
   applications        ProjectApplication[]
   sentAppMessages     ApplicationMessage[]
-  disputesFiled                Dispute[]                     @relation("DisputeReporter")
-  disputesAgainst              Dispute[]                     @relation("DisputeReportedUser")
-  reportsFiled                 Report[]                      @relation("ReportReporter")
-  reportsAgainst               Report[]                      @relation("ReportReportedUser")
+
 
   // Admin Notes
   adminNotes                   AdminNote[]
