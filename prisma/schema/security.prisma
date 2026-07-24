@@ -34,80 +34,79 @@ enum ReportStatus {
 }
 
 model LoginActivity {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   userId    String
   ipAddress String?
   userAgent String?
   status    LoginStatus @default(FAILED)
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
 
   user UserProfile @relation(fields: [userId], references: [id])
 }
 
 model DataExportRequest {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String
   status    DataExportStatus @default(PENDING)
   fileUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
   user UserProfile @relation(fields: [userId], references: [id])
 }
 
 model SupportTicket {
-  id        String   @id @default(cuid())
+  id        String              @id @default(cuid())
   userId    String
   subject   String
   message   String
   status    SupportTicketStatus @default(OPEN)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
 
   user UserProfile @relation(fields: [userId], references: [id])
 }
 
 model IdentityVerificationRequest {
-  id        String   @id @default(cuid())
+  id        String                     @id @default(cuid())
   userId    String
   status    IdentityVerificationStatus @default(PENDING)
-  documents Json?    // Array of document URLs
+  documents Json? // Array of document URLs
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime                   @default(now())
+  updatedAt DateTime                   @updatedAt
 
   user UserProfile @relation(fields: [userId], references: [id])
 }
 
 model Dispute {
-  id             String   @id @default(cuid())
+  id             String        @id @default(cuid())
   reporterId     String
   reportedUserId String?
   projectId      String?
   reason         String
   description    String?
   status         DisputeStatus @default(OPEN)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  reporter       UserProfile  @relation("DisputeReporter", fields: [reporterId], references: [id])
-  reportedUser   UserProfile? @relation("DisputeReportedUser", fields: [reportedUserId], references: [id])
-  project        Project?     @relation(fields: [projectId], references: [id])
+  reporter     UserProfile  @relation("DisputeReporter", fields: [reporterId], references: [id])
+  reportedUser UserProfile? @relation("DisputeReportedUser", fields: [reportedUserId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
 }
 
 model Report {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   reporterId     String
   reportedUserId String?
   projectId      String?
   reason         String
   description    String?
   status         ReportStatus @default(OPEN)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  reporter       UserProfile  @relation("ReportReporter", fields: [reporterId], references: [id])
-  reportedUser   UserProfile? @relation("ReportReportedUser", fields: [reportedUserId], references: [id])
-  project        Project?     @relation(fields: [projectId], references: [id])
+  reporter     UserProfile  @relation("ReportReporter", fields: [reporterId], references: [id])
+  reportedUser UserProfile? @relation("ReportReportedUser", fields: [reportedUserId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
 }
-

@@ -58,6 +58,30 @@ router.post('/verify-2fa', AdminAuthController.verify2FA);
 
 /**
  * @swagger
+ * /api/v1/admin/auth/resend-2fa:
+ *   post:
+ *     summary: Resend 2FA code
+ *     description: Resend the 2FA code sent to the admin's email. Enforces a 2-minute wait time.
+ *     tags: [Admin Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               adminId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 2FA code resent successfully
+ *       400:
+ *         description: Must wait before resending or invalid admin
+ */
+router.post('/resend-2fa', AdminAuthController.resend2FA);
+
+/**
+ * @swagger
  * /api/v1/admin/auth/forgot-password:
  *   post:
  *     summary: Forgot password
