@@ -7,32 +7,45 @@ enum AdminRole {
 }
 
 model AdminUser {
-  id                  String        @id @default(cuid())
-  email               String        @unique
-  password            String
-  role                AdminRole     @default(SUPPORT_ADMIN)
-  
+  id       String    @id @default(cuid())
+  email    String    @unique
+  password String
+  role     AdminRole @default(SUPPORT_ADMIN)
+
   // Session Security
   tokenVersion        Int           @default(0)
   accountStatus       AccountStatus @default(ACTIVE)
   failedLoginAttempts Int           @default(0)
   lockoutUntil        DateTime?
   lastActiveAt        DateTime      @default(now())
-  
+
   // Password Reset
-  resetToken          String?       @unique
-  resetTokenExpiry    DateTime?
+  resetToken       String?   @unique
+  resetTokenExpiry DateTime?
 
   // Two-Factor Authentication
-  isTwoFactorEnabled  Boolean       @default(true)
+  isTwoFactorEnabled  Boolean   @default(true)
   twoFactorCode       String?
   twoFactorCodeExpiry DateTime?
 
   // Audit Logs
-  adminAuditLogs      AdminAuditLog[]
+  adminAuditLogs AdminAuditLog[]
 
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  adminNotes AdminNote[]
+}
+
+model AdminNote {
+  id           String      @id @default(cuid())
+  adminId      String
+  targetUserId String
+  content      String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  admin        AdminUser   @relation(fields: [adminId], references: [id])
+  targetUser   UserProfile @relation(fields: [targetUserId], references: [id])
 }
 
 model AdminAuditLog {
@@ -45,4 +58,13 @@ model AdminAuditLog {
   createdAt DateTime @default(now())
 
   admin AdminUser @relation(fields: [adminId], references: [id])
+}
+
+model AdminRoleConfig {
+  id          String    @id @default(cuid())
+  role        AdminRole @unique
+  permissions String[]
+  modules     String[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }

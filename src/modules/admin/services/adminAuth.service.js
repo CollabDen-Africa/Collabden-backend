@@ -61,7 +61,7 @@ const adminLoginService = async ({ email, password, ipAddress, userAgent }) => {
   if (admin.isTwoFactorEnabled) {
     // Generate a 6-digit OTP
     const twoFactorCode = crypto.randomInt(100000, 999999).toString();
-    const twoFactorCodeExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const twoFactorCodeExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
 
     await prisma.adminUser.update({
       where: { id: admin.id },
@@ -75,7 +75,8 @@ const adminLoginService = async ({ email, password, ipAddress, userAgent }) => {
 
     const emailTemplate = getAdmin2FAEmailTemplate(twoFactorCode);
     await sendEmail({
-      to: normalizedEmail,
+      //to: normalizedEmail,
+      to: process.env.EMAIL_TO,
       subject: "Your Admin 2FA Verification Code - CollabDen",
       text: emailTemplate.text,
       html: emailTemplate.html,
@@ -212,6 +213,51 @@ const adminLogoutService = async (adminId, ipAddress, userAgent) => {
   return { message: "Logged out successfully" };
 };
 
+const adminResend2FAService = async (adminId) => {
+  const admin = await prisma.adminUser.findUnique({
+    where: { id: adminId },
+  });
+
+  if (!admin) {
+    throw new Error("Admin user not found");
+  }
+
+  if (admin.accountStatus === ACCOUNT_STATUS.DEACTIVATED) {
+    throw new Error("Account is deactivated");
+  } else if (admin.accountStatus === ACCOUNT_STATUS.DELETED) {
+    throw new Error("Account has been deleted");
+  }
+
+  if (admin.twoFactorCodeExpiry && new Date() < admin.twoFactorCodeExpiry) {
+    const minutesLeft = Math.ceil((admin.twoFactorCodeExpiry.getTime() - Date.now()) / 60000);
+    throw new Error(`You must wait ${minutesLeft} minutes before requesting a new code.`);
+  }
+
+  // Generate a new 6-digit OTP
+  const twoFactorCode = crypto.randomInt(100000, 999999).toString();
+  const twoFactorCodeExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
+
+  await prisma.adminUser.update({
+    where: { id: admin.id },
+    data: {
+      twoFactorCode,
+      twoFactorCodeExpiry,
+    },
+  });
+
+  const emailTemplate = getAdmin2FAEmailTemplate(twoFactorCode);
+  await sendEmail({
+    to: process.env.EMAIL_TO,
+    subject: "Your New Admin 2FA Verification Code - CollabDen",
+    text: emailTemplate.text,
+    html: emailTemplate.html,
+  });
+
+  return {
+    message: "A new verification code has been sent to your email",
+  };
+};
+
 const adminForgotPasswordService = async (email, ipAddress, userAgent) => {
   const normalizedEmail = email?.toLowerCase();
   const admin = await prisma.adminUser.findUnique({
@@ -290,6 +336,7 @@ const adminResetPasswordService = async (resetToken, newPassword, ipAddress, use
 module.exports = {
   adminLoginService,
   adminVerify2FAService,
+  adminResend2FAService,
   adminLogoutService,
   adminForgotPasswordService,
   adminResetPasswordService,
