@@ -8,8 +8,19 @@ const {
   deleteProject,
   removeCollaborator,
   getProjectMetadata,
+  getMarketplace,
+  getMarketplaceSummary,
 } = require("../controllers/projects.controller");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
+const {
+  applyToProject,
+  getProjectApplications,
+  getMyApplications,
+  getApplicationDetails,
+  sendApplicationMessage,
+  getApplicationMessages,
+  reviewApplication,
+} = require("../controllers/applications.controller");
 
 const router = Router();
 
@@ -115,6 +126,259 @@ router.post("/", createProject);
  *         description: List of projects fetched successfully
  */
 router.get("/", getProjects);
+
+/**
+ * @swagger
+ * /api/v1/projects/marketplace:
+ *   get:
+ *     summary: Retrieve public projects open to collaboration with filters and search
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: genre
+ *         schema:
+ *           type: string
+ *         description: Filter by genre
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *         description: Filter by required collaborator role
+ *       - in: query
+ *         name: requirements
+ *         schema:
+ *           type: string
+ *         description: Filter by required skills
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by project name or description
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *         description: Filter projects starting on or after this date (ISO date)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *         description: Filter projects ending on or before this date (ISO date)
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: Sort field
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: Sort direction
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of marketplace projects retrieved successfully
+ */
+router.get("/marketplace", getMarketplace);
+
+/**
+ * @swagger
+ * /api/v1/projects/marketplace/{id}/summary:
+ *   get:
+ *     summary: Retrieve public summary information of a marketplace project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     responses:
+ *       200:
+ *         description: Project summary retrieved successfully
+ *       404:
+ *         description: Project not found or is private
+ */
+router.get("/marketplace/:id/summary", getMarketplaceSummary);
+
+/**
+ * @swagger
+ * /api/v1/projects/applications/my-applications:
+ *   get:
+ *     summary: List all applications submitted by the current user
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of applications fetched successfully
+ */
+router.get("/applications/my-applications", getMyApplications);
+
+/**
+ * @swagger
+ * /api/v1/projects/applications/{applicationId}:
+ *   get:
+ *     summary: Retrieve details of a specific application (Applicant or Owner only)
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Application details fetched successfully
+ *       403:
+ *         description: Access denied
+ */
+router.get("/applications/:applicationId", getApplicationDetails);
+
+/**
+ * @swagger
+ * /api/v1/projects/applications/{applicationId}/review:
+ *   post:
+ *     summary: Review (Accept or Reject) a project application
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [ACCEPTED, REJECTED]
+ *     responses:
+ *       200:
+ *         description: Application reviewed successfully
+ */
+router.post("/applications/:applicationId/review", reviewApplication);
+
+/**
+ * @swagger
+ * /api/v1/projects/applications/{applicationId}/messages:
+ *   post:
+ *     summary: Send a communication message on an application
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - message
+ *             properties:
+ *               message:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Message sent successfully
+ *   get:
+ *     summary: Retrieve message history for an application
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Messages fetched successfully
+ */
+router.post("/applications/:applicationId/messages", sendApplicationMessage);
+router.get("/applications/:applicationId/messages", getApplicationMessages);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/apply:
+ *   post:
+ *     summary: Apply to join a project
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: A short introduction or motivation statement
+ *     responses:
+ *       201:
+ *         description: Application submitted successfully
+ *       400:
+ *         description: Bad request (e.g., owner applying, already applied, project not open)
+ */
+router.post("/:id/apply", applyToProject);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/applications:
+ *   get:
+ *     summary: List all applications for a specific project (Project Owner only)
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of applications fetched successfully
+ */
+router.get("/:id/applications", getProjectApplications);
 
 /**
  * @swagger

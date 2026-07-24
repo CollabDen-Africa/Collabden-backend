@@ -1,0 +1,34 @@
+enum ApplicationStatus {
+  APPLIED
+  ACCEPTED
+  REJECTED
+}
+
+model ProjectApplication {
+  id          String               @id @default(cuid())
+  projectId   String
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  applicantId String
+  applicant   UserProfile          @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  status      ApplicationStatus    @default(APPLIED)
+  message     String?              // short message or introduction
+  messages    ApplicationMessage[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([projectId, applicantId])
+  @@index([projectId])
+  @@index([applicantId])
+}
+
+model ApplicationMessage {
+  id            String             @id @default(cuid())
+  applicationId String
+  application   ProjectApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  senderId      String
+  sender        UserProfile        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  message       String
+  createdAt     DateTime           @default(now())
+
+  @@index([applicationId])
+}
