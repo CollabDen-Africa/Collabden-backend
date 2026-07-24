@@ -75,8 +75,7 @@ const adminLoginService = async ({ email, password, ipAddress, userAgent }) => {
 
     const emailTemplate = getAdmin2FAEmailTemplate(twoFactorCode);
     await sendEmail({
-      //to: normalizedEmail,
-      to: process.env.EMAIL_TO,
+      to: normalizedEmail,
       subject: "Your Admin 2FA Verification Code - CollabDen",
       text: emailTemplate.text,
       html: emailTemplate.html,
@@ -247,7 +246,7 @@ const adminResend2FAService = async (adminId) => {
 
   const emailTemplate = getAdmin2FAEmailTemplate(twoFactorCode);
   await sendEmail({
-    to: process.env.EMAIL_TO,
+    to: admin.email,
     subject: "Your New Admin 2FA Verification Code - CollabDen",
     text: emailTemplate.text,
     html: emailTemplate.html,
