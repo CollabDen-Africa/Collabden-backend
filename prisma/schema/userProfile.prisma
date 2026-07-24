@@ -82,19 +82,19 @@ model UserProfile {
   savedPaymentMethods SavedPaymentMethod[]
 
   // Wallet & Payments
-  wallet              Wallet?
-  transactions        Transaction[]
-  bankAccounts        BankAccount[]
-  paymentRecords      PaymentRecord[]
+  wallet         Wallet?
+  transactions   Transaction[]
+  bankAccounts   BankAccount[]
+  paymentRecords PaymentRecord[]
 
   // Escrow
-  escrowAllocations       EscrowAllocation[]
-  escrowActivities        EscrowActivity[]
-  milestoneCollaborators  MilestoneCollaborator[]
+  escrowAllocations      EscrowAllocation[]
+  escrowActivities       EscrowActivity[]
+  milestoneCollaborators MilestoneCollaborator[]
   // Security & Account
-  loginActivities    LoginActivity[]
-  dataExportRequests DataExportRequest[]
-  supportTickets     SupportTicket[]
+  loginActivities        LoginActivity[]
+  dataExportRequests     DataExportRequest[]
+  supportTickets         SupportTicket[]
 
   // Notification Settings
   notificationSetting NotificationSetting?
@@ -109,6 +109,13 @@ model UserProfile {
   // Project Applications
   applications        ProjectApplication[]
   sentAppMessages     ApplicationMessage[]
+  disputesFiled                Dispute[]                     @relation("DisputeReporter")
+  disputesAgainst              Dispute[]                     @relation("DisputeReportedUser")
+  reportsFiled                 Report[]                      @relation("ReportReporter")
+  reportsAgainst               Report[]                      @relation("ReportReportedUser")
+
+  // Admin Notes
+  adminNotes                   AdminNote[]
 }
 
 model UserConnection {

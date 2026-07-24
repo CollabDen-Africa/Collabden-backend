@@ -30,22 +30,22 @@ enum EscrowApprovalStatus {
 // Linked to a signed LegalAgreement for dispute resolution and audit.
 
 model Escrow {
-  id                String           @id @default(cuid())
-  projectId         String           @unique
-  agreementId       String
-  totalAmount       Decimal          @db.Decimal(12, 2)
-  fundedAmount      Decimal          @default(0) @db.Decimal(12, 2)
-  releasedAmount    Decimal          @default(0) @db.Decimal(12, 2)
-  status            EscrowStatus     @default(PENDING_FUNDING)
-  reviewPeriodDays  Int              @default(7)
-  fundingReference  String?          @unique
-  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  agreement         LegalAgreement   @relation(fields: [agreementId], references: [id])
-  milestones        EscrowMilestone[]
-  allocations       EscrowAllocation[]
-  activities        EscrowActivity[]
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id               String             @id @default(cuid())
+  projectId        String             @unique
+  agreementId      String
+  totalAmount      Decimal            @db.Decimal(12, 2)
+  fundedAmount     Decimal            @default(0) @db.Decimal(12, 2)
+  releasedAmount   Decimal            @default(0) @db.Decimal(12, 2)
+  status           EscrowStatus       @default(PENDING_FUNDING)
+  reviewPeriodDays Int                @default(7)
+  fundingReference String?            @unique
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agreement        LegalAgreement     @relation(fields: [agreementId], references: [id])
+  milestones       EscrowMilestone[]
+  allocations      EscrowAllocation[]
+  activities       EscrowActivity[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@index([projectId])
   @@index([status])
@@ -58,24 +58,24 @@ model Escrow {
 // receives the full milestone amount (e.g. $10k milestone × 3 collaborators = $30k total).
 
 model EscrowMilestone {
-  id               String          @id @default(cuid())
-  escrowId         String
-  title            String
-  description      String?
-  amount           Decimal         @db.Decimal(12, 2)
-  status           MilestoneStatus @default(PENDING)
-  dueDate          DateTime?
-  submittedAt      DateTime?
-  reviewDeadline   DateTime?
-  approvedAt       DateTime?
-  evidence         Json?           @default("{}") // { files: [], links: [], documents: [], comment: "" }
-  disputeReason    String?
+  id                String                  @id @default(cuid())
+  escrowId          String
+  title             String
+  description       String?
+  amount            Decimal                 @db.Decimal(12, 2)
+  status            MilestoneStatus         @default(PENDING)
+  dueDate           DateTime?
+  submittedAt       DateTime?
+  reviewDeadline    DateTime?
+  approvedAt        DateTime?
+  evidence          Json?                   @default("{}") // { files: [], links: [], documents: [], comment: "" }
+  disputeReason     String?
   disputeResolution String?
-  isAutoReleased   Boolean         @default(false)
-  escrow           Escrow          @relation(fields: [escrowId], references: [id], onDelete: Cascade)
-  collaborators    MilestoneCollaborator[]
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  isAutoReleased    Boolean                 @default(false)
+  escrow            Escrow                  @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  collaborators     MilestoneCollaborator[]
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   @@index([escrowId])
   @@index([status])
@@ -108,19 +108,19 @@ model MilestoneCollaborator {
 // and the collaborator's approval of the escrow terms.
 
 model EscrowAllocation {
-  id               String               @id @default(cuid())
-  escrowId         String
-  collaboratorId   String
-  userId           String
-  totalAmount      Decimal              @db.Decimal(12, 2)
-  releasedAmount   Decimal              @default(0) @db.Decimal(12, 2)
-  approvalStatus   EscrowApprovalStatus @default(PENDING)
-  approvalComment  String?
-  approvedAt       DateTime?
-  escrow           Escrow               @relation(fields: [escrowId], references: [id], onDelete: Cascade)
-  user             UserProfile          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  id              String               @id @default(cuid())
+  escrowId        String
+  collaboratorId  String
+  userId          String
+  totalAmount     Decimal              @db.Decimal(12, 2)
+  releasedAmount  Decimal              @default(0) @db.Decimal(12, 2)
+  approvalStatus  EscrowApprovalStatus @default(PENDING)
+  approvalComment String?
+  approvedAt      DateTime?
+  escrow          Escrow               @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  user            UserProfile          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
   @@unique([escrowId, userId])
   @@index([escrowId])
@@ -132,15 +132,15 @@ model EscrowAllocation {
 // disputes, releases, and auto-release events.
 
 model EscrowActivity {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   escrowId  String
   userId    String?
   action    String
   details   String?
-  metadata  Json?    @default("{}")
-  escrow    Escrow   @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  metadata  Json?        @default("{}")
+  escrow    Escrow       @relation(fields: [escrowId], references: [id], onDelete: Cascade)
   user      UserProfile? @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 
   @@index([escrowId])
 }
