@@ -4,7 +4,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const sendEmail = async ({ to, subject, text, html }) => {
   try {
     const { data, error } = await resend.emails.send({
-      from: "Collabden <noreply@account.collabden.africa>",
+      // Resend requires the 'from' address to be 'onboarding@resend.dev' if your domain is unverified.
+      // You can only send to the email address you registered your Resend account with during testing.
+      from: process.env.EMAIL_FROM || "Collabden <onboarding@resend.dev>",
       to,
       subject,
       text,
