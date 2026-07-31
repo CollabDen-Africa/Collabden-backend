@@ -1,9 +1,9 @@
 const prisma = require("../../../config/prismaClient");
 const bcrypt = require("bcryptjs");
 
-const createAdmin = async ({ email, password, role }) => {
+const createAdmin = async ({ email, password, role }, auditContext = {}) => {
   const existingAdmin = await prisma.adminUser.findUnique({
-    where: { email }
+    where: { email },
   });
 
   if (existingAdmin) {
@@ -12,20 +12,43 @@ const createAdmin = async ({ email, password, role }) => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  return await prisma.adminUser.create({
-    data: {
-      email,
-      password: hashedPassword,
-      role
-    },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      accountStatus: true,
-      createdAt: true
+  const newAdmin = await prisma.$transaction(async (tx) => {
+    const admin = await tx.adminUser.create({
+      data: {
+        email,
+        password: hashedPassword,
+        role,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+        createdAt: true,
+      },
+    });
+
+    // Record admin creation in audit log
+    if (auditContext.performedBy) {
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: auditContext.performedBy,
+          action: "ADMIN_CREATED",
+          details: {
+            createdAdminId: admin.id,
+            email: admin.email,
+            role: admin.role,
+          },
+          ipAddress: auditContext.ipAddress || null,
+          userAgent: auditContext.userAgent || null,
+        },
+      });
     }
+
+    return admin;
   });
+
+  return newAdmin;
 };
 
 const getAdmins = async () => {
@@ -62,30 +85,94 @@ const getAdminById = async (id) => {
   return admin;
 };
 
-const updateAdmin = async (id, updateData) => {
+const updateAdmin = async (id, updateData, auditContext = {}) => {
   const admin = await prisma.adminUser.findUnique({ where: { id } });
   if (!admin) {
     throw new Error("Admin user not found");
   }
 
-  // updateData should only contain allowed fields (role, accountStatus)
-  // Password updates are explicitly excluded from this service method
-  return await prisma.adminUser.update({
-    where: { id },
-    data: updateData,
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      accountStatus: true,
-      updatedAt: true
+  // Prevent an admin from changing their own role
+  if (updateData.role && auditContext.performedBy === id) {
+    throw new Error(
+      "You cannot change your own role. Another SUPER_ADMIN must perform this action."
+    );
+  }
+
+  // Prevent changing the last SUPER_ADMIN's role away from SUPER_ADMIN
+  if (
+    updateData.role &&
+    admin.role === "SUPER_ADMIN" &&
+    updateData.role !== "SUPER_ADMIN"
+  ) {
+    const activeSuperAdminCount = await prisma.adminUser.count({
+      where: {
+        role: "SUPER_ADMIN",
+        accountStatus: "ACTIVE",
+      },
+    });
+
+    if (activeSuperAdminCount <= 1) {
+      throw new Error(
+        "Cannot change role: This is the last active SUPER_ADMIN. Promote another admin first."
+      );
     }
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const updatedAdmin = await tx.adminUser.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+        updatedAt: true,
+      },
+    });
+
+    // Record role/status change in audit log
+    if (auditContext.performedBy) {
+      const changes = {};
+      if (updateData.role && updateData.role !== admin.role) {
+        changes.role = { from: admin.role, to: updateData.role };
+      }
+      if (
+        updateData.accountStatus &&
+        updateData.accountStatus !== admin.accountStatus
+      ) {
+        changes.accountStatus = {
+          from: admin.accountStatus,
+          to: updateData.accountStatus,
+        };
+      }
+
+      if (Object.keys(changes).length > 0) {
+        await tx.adminAuditLog.create({
+          data: {
+            adminId: auditContext.performedBy,
+            action: "ADMIN_UPDATED",
+            details: {
+              targetAdminId: id,
+              targetEmail: admin.email,
+              changes,
+            },
+            ipAddress: auditContext.ipAddress || null,
+            userAgent: auditContext.userAgent || null,
+          },
+        });
+      }
+    }
+
+    return updatedAdmin;
   });
 };
 
-const deactivateAdmin = async (id, requestingAdminId) => {
+const deactivateAdmin = async (id, requestingAdminId, auditContext = {}) => {
   if (id === requestingAdminId) {
-    throw new Error("You cannot deactivate your own account. Another SUPER_ADMIN must perform this action.");
+    throw new Error(
+      "You cannot deactivate your own account. Another SUPER_ADMIN must perform this action."
+    );
   }
 
   const admin = await prisma.adminUser.findUnique({ where: { id } });
@@ -93,18 +180,55 @@ const deactivateAdmin = async (id, requestingAdminId) => {
     throw new Error("Admin user not found");
   }
 
-  return await prisma.adminUser.update({
-    where: { id },
-    data: {
-      accountStatus: "DEACTIVATED",
-      tokenVersion: { increment: 1 } // Invalidate current sessions
-    },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      accountStatus: true
+  // Prevent deactivating the last active SUPER_ADMIN
+  if (admin.role === "SUPER_ADMIN") {
+    const activeSuperAdminCount = await prisma.adminUser.count({
+      where: {
+        role: "SUPER_ADMIN",
+        accountStatus: "ACTIVE",
+      },
+    });
+
+    if (activeSuperAdminCount <= 1) {
+      throw new Error(
+        "Cannot deactivate: This is the last active SUPER_ADMIN. Promote another admin first."
+      );
     }
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const deactivatedAdmin = await tx.adminUser.update({
+      where: { id },
+      data: {
+        accountStatus: "DEACTIVATED",
+        tokenVersion: { increment: 1 }, // Invalidate current sessions
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+      },
+    });
+
+    // Record deactivation in audit log
+    if (auditContext.performedBy) {
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: auditContext.performedBy,
+          action: "ADMIN_DEACTIVATED",
+          details: {
+            targetAdminId: id,
+            targetEmail: admin.email,
+            targetRole: admin.role,
+          },
+          ipAddress: auditContext.ipAddress || null,
+          userAgent: auditContext.userAgent || null,
+        },
+      });
+    }
+
+    return deactivatedAdmin;
   });
 };
 
