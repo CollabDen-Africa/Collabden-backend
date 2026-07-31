@@ -21,7 +21,13 @@ const createAdminController = async (req, res) => {
       return res.status(400).json({ error: "Email, password, and role are required." });
     }
 
-    const newAdmin = await createAdmin({ email, password, role });
+    const auditContext = {
+      performedBy: req.user.id,
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    };
+
+    const newAdmin = await createAdmin({ email, password, role }, auditContext);
     res.status(201).json(newAdmin);
   } catch (error) {
     if (error.message.includes("already exists")) {
@@ -71,11 +77,20 @@ const updateAdminController = async (req, res) => {
       return res.status(400).json({ error: "No valid fields provided for update." });
     }
 
-    const updatedAdmin = await updateAdmin(id, updateData);
+    const auditContext = {
+      performedBy: req.user.id,
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    };
+
+    const updatedAdmin = await updateAdmin(id, updateData, auditContext);
     res.status(200).json(updatedAdmin);
   } catch (error) {
     if (error.message === "Admin user not found") {
       return res.status(404).json({ error: error.message });
+    }
+    if (error.message.includes("own role") || error.message.includes("last active SUPER_ADMIN")) {
+      return res.status(403).json({ error: error.message });
     }
     res.status(500).json({ error: error.message });
   }
@@ -85,8 +100,14 @@ const deactivateAdminController = async (req, res) => {
   try {
     const { id } = req.params;
     const requestingAdminId = req.user.id;
+
+    const auditContext = {
+      performedBy: requestingAdminId,
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    };
     
-    const deactivatedAdmin = await deactivateAdmin(id, requestingAdminId);
+    const deactivatedAdmin = await deactivateAdmin(id, requestingAdminId, auditContext);
     res.status(200).json({
       message: "Admin deactivated successfully.",
       admin: deactivatedAdmin
@@ -95,7 +116,7 @@ const deactivateAdminController = async (req, res) => {
     if (error.message === "Admin user not found") {
       return res.status(404).json({ error: error.message });
     }
-    if (error.message.includes("own account")) {
+    if (error.message.includes("own account") || error.message.includes("last active SUPER_ADMIN")) {
       return res.status(403).json({ error: error.message });
     }
     res.status(500).json({ error: error.message });
@@ -215,10 +236,10 @@ const addAdminNoteController = async (req, res) => {
     const { id } = req.params;
     const { content } = req.body;
     
-    const adminId = req.body.adminId;
+    const adminId = req.user.id;
     
-    if (!adminId || !content) {
-      return res.status(400).json({ error: "adminId and content are required." });
+    if (!content) {
+      return res.status(400).json({ error: "content is required." });
     }
 
     const note = await addAdminNote(adminId, id, content);

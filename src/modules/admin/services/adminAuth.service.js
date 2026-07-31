@@ -12,7 +12,11 @@ const sanitizeAdmin = (admin) => {
 };
 
 const adminLoginService = async ({ email, password, ipAddress, userAgent }) => {
-  const normalizedEmail = email?.toLowerCase();
+  if (!email || !password) {
+    throw new Error("Email and password are required");
+  }
+
+  const normalizedEmail = email.toLowerCase();
   const admin = await prisma.adminUser.findUnique({
     where: { email: normalizedEmail },
   });

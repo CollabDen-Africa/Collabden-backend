@@ -15,8 +15,17 @@ const {
   moderateUserController
 } = require("../controllers/adminUsers.controller");
 const { adminMiddleware } = require("../../../middleware/admin.middleware");
+const { checkPermission } = require("../../../middleware/checkPermission.middleware");
+const { ADMIN_PERMISSIONS } = require("../../../config/constants");
 
 const router = Router();
+
+// All routes require authentication
+router.use(adminMiddleware());
+
+// ──────────────────────────────────────────────
+// Platform User Management Routes
+// ──────────────────────────────────────────────
 
 /**
  * @swagger
@@ -27,9 +36,8 @@ const router = Router();
  *     security:
  *       - bearerAuth: []
  */
-// Accessible by both ADMIN and SUPER_ADMIN
 router.get("/all-users",
-    adminMiddleware(["ADMIN", "SUPER_ADMIN"]),
+    checkPermission(ADMIN_PERMISSIONS.USERS_VIEW),
     getUsersController);
 
 /**
@@ -42,7 +50,7 @@ router.get("/all-users",
  *       - bearerAuth: []
  */
 router.get("/all-users/:id",
-    adminMiddleware(),
+    checkPermission(ADMIN_PERMISSIONS.USERS_VIEW),
     getUserByIdController);
 
 /**
@@ -55,7 +63,7 @@ router.get("/all-users/:id",
  *       - bearerAuth: []
  */
 router.get("/all-users/:id/activity",
-    adminMiddleware(),
+    checkPermission(ADMIN_PERMISSIONS.USERS_VIEW_ACTIVITY),
     getUserActivityController);
 
 /**
@@ -68,7 +76,7 @@ router.get("/all-users/:id/activity",
  *       - bearerAuth: []
  */
 router.get("/all-users/:id/reports",
-    adminMiddleware(),
+    checkPermission(ADMIN_PERMISSIONS.USERS_VIEW_REPORTS),
     getUserReportsController);
 
 /**
@@ -81,7 +89,7 @@ router.get("/all-users/:id/reports",
  *       - bearerAuth: []
  */
 router.get("/all-users/:id/audit-history",
-    adminMiddleware(),
+    checkPermission(ADMIN_PERMISSIONS.USERS_VIEW_AUDIT),
     getUserAuditHistoryController);
 
 /**
@@ -94,7 +102,7 @@ router.get("/all-users/:id/audit-history",
  *       - bearerAuth: []
  */
 router.get("/all-users/:id/notes",
-    adminMiddleware(),
+    checkPermission(ADMIN_PERMISSIONS.USERS_VIEW),
     getUserNotesController);
 
 /**
@@ -107,7 +115,7 @@ router.get("/all-users/:id/notes",
  *       - bearerAuth: []
  */
 router.post("/all-users/:id/notes",
-  adminMiddleware(["SUPER_ADMIN", "ADMIN", "MODERATOR"]),
+  checkPermission(ADMIN_PERMISSIONS.USERS_ADD_NOTES),
   addAdminNoteController
 );
 
@@ -121,12 +129,13 @@ router.post("/all-users/:id/notes",
  *       - bearerAuth: []
  */
 router.post("/all-users/:id/moderate",
-  adminMiddleware(),
+  checkPermission(ADMIN_PERMISSIONS.USERS_MODERATE),
   moderateUserController
 );
 
-// Only SUPER_ADMIN is allowed to manage other admins
-router.use(adminMiddleware(["SUPER_ADMIN"]));
+// ──────────────────────────────────────────────
+// Admin User Management Routes (SUPER_ADMIN only)
+// ──────────────────────────────────────────────
 
 /**
  * @swagger
@@ -137,7 +146,10 @@ router.use(adminMiddleware(["SUPER_ADMIN"]));
  *     security:
  *       - bearerAuth: []
  */
-router.post("/", createAdminController);
+router.post("/",
+  checkPermission(ADMIN_PERMISSIONS.ADMINS_CREATE),
+  createAdminController
+);
 
 /**
  * @swagger
@@ -148,7 +160,10 @@ router.post("/", createAdminController);
  *     security:
  *       - bearerAuth: []
  */
-router.get("/", getAdminsController);
+router.get("/",
+  checkPermission(ADMIN_PERMISSIONS.ADMINS_VIEW),
+  getAdminsController
+);
 
 /**
  * @swagger
@@ -159,7 +174,10 @@ router.get("/", getAdminsController);
  *     security:
  *       - bearerAuth: []
  */
-router.get("/:id", getAdminByIdController);
+router.get("/:id",
+  checkPermission(ADMIN_PERMISSIONS.ADMINS_VIEW),
+  getAdminByIdController
+);
 
 /**
  * @swagger
@@ -170,7 +188,10 @@ router.get("/:id", getAdminByIdController);
  *     security:
  *       - bearerAuth: []
  */
-router.put("/:id/role", updateAdminController);
+router.put("/:id/role",
+  checkPermission(ADMIN_PERMISSIONS.ADMINS_UPDATE_ROLE),
+  updateAdminController
+);
 
 /**
  * @swagger
@@ -181,6 +202,9 @@ router.put("/:id/role", updateAdminController);
  *     security:
  *       - bearerAuth: []
  */
-router.patch("/:id/deactivate", deactivateAdminController);
+router.patch("/:id/deactivate",
+  checkPermission(ADMIN_PERMISSIONS.ADMINS_DEACTIVATE),
+  deactivateAdminController
+);
 
 module.exports = router;
