@@ -21,6 +21,7 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.AVAILABILITY_STATUS_UPDATED,
     EVENT_TYPES.PROJECT_APPLICATION_SUBMITTED,
     EVENT_TYPES.PROJECT_APPLICATION_STATUS_CHANGED,
+    EVENT_TYPES.USER_MODERATED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe:", err.message);
@@ -71,6 +72,10 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.PROJECT_APPLICATION_STATUS_CHANGED:
           await handleProjectApplicationStatusChanged(payload);
+          break;
+
+        case EVENT_TYPES.USER_MODERATED:
+          await handleUserModerated(payload);
           break;
 
         default:
@@ -406,4 +411,34 @@ const handleProjectApplicationStatusChanged = async ({ applicationId, projectId,
   });
 };
 
+/**
+ * Handle USER_MODERATED event:
+ * - Send notification to user about moderation status change
+ * - Push real-time notification via WebSocket
+ */
+const handleUserModerated = async ({ userId, action, reason }) => {
+  console.log(`[Listener] Processing USER_MODERATED for user ${userId}`);
+
+  const canSendInApp = await shouldSend(userId, "inApp");
+  if (!canSendInApp) {
+    console.log(`[Listener] Skipping in-app notification for user ${userId} (settings disabled)`);
+    return;
+  }
+
+  const notification = await createNotification({
+    userId,
+    title: `Account Moderation Update`,
+    message: `Your account status has been updated to "${action}". Reason: ${reason}`,
+    type: "STATUS_UPDATE",
+    link: `/settings/profile`,
+  });
+
+  // Push real-time notification to the user
+  sendToUser(userId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
 module.exports = { registerNotificationListeners };
+
