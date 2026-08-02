@@ -10,6 +10,7 @@ const {
   getProjectMetadata,
   getMarketplace,
   getMarketplaceSummary,
+  reportProject,
 } = require("../controllers/projects.controller");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const {
@@ -546,5 +547,40 @@ router.delete("/:id/collaborators/:collaboratorId", removeCollaborator);
  *         description: Project metadata fetched successfully
  */
 router.get("/:id/metadata", getProjectMetadata);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/report:
+ *   post:
+ *     summary: Report a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Project reported successfully
+ *       404:
+ *         description: Project not found
+ */
+router.post("/:id/report", reportProject);
 
 module.exports = router;
