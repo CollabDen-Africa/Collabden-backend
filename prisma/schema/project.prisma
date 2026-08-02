@@ -42,8 +42,9 @@ model Project {
   updatedAt     DateTime              @updatedAt
 
   // Administrative Actions
-  disputes Dispute[]
-  reports  Report[]
+  disputes      Dispute[]
+  reports       Report[]
+  adminNotes    AdminNote[]
 }
 
 model ProjectCollaborator {

@@ -657,6 +657,34 @@ const getMarketplaceProjectSummaryService = async (projectId) => {
   return project;
 };
 
+const reportProjectService = async (projectId, reporterId, reportData) => {
+  const { reason, description } = reportData;
+
+  if (!reason) {
+    throw new Error("A reason must be provided to report a project.");
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+  });
+
+  if (!project || project.isDeleted) {
+    throw new Error("Project not found.");
+  }
+
+  const report = await prisma.report.create({
+    data: {
+      projectId,
+      reporterId,
+      reason,
+      description,
+      status: "OPEN",
+    },
+  });
+
+  return report;
+};
+
 module.exports = {
   createProjectService,
   getProjectListService,
@@ -668,4 +696,5 @@ module.exports = {
   getProjectMetadataService,
   getMarketplaceProjectsService,
   getMarketplaceProjectSummaryService,
+  reportProjectService,
 };
