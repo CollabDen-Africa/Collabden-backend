@@ -44,6 +44,7 @@ model Project {
   // Administrative Actions
   disputes      Dispute[]
   reports       Report[]
+  adminNotes    AdminNote[]
 }
 
 model ProjectCollaborator {

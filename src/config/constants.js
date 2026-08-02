@@ -56,6 +56,64 @@ const SUPPORT_TICKET_STATUS = {
   RESOLVED: 'RESOLVED',
 };
 
+const ADMIN_PERMISSIONS = {
+  // User management
+  USERS_VIEW: 'users.view',
+  USERS_MODERATE: 'users.moderate',
+  USERS_ADD_NOTES: 'users.add_notes',
+  USERS_VIEW_ACTIVITY: 'users.view_activity',
+  USERS_VIEW_REPORTS: 'users.view_reports',
+  USERS_VIEW_AUDIT: 'users.view_audit',
+
+  // Admin management
+  ADMINS_VIEW: 'admins.view',
+  ADMINS_CREATE: 'admins.create',
+  ADMINS_UPDATE_ROLE: 'admins.update_role',
+  ADMINS_DEACTIVATE: 'admins.deactivate',
+
+  // Permissions management
+  PERMISSIONS_VIEW: 'permissions.view',
+  PERMISSIONS_MANAGE: 'permissions.manage',
+
+  // Finance
+  FINANCE_VIEW: 'finance.view',
+  FINANCE_MANAGE: 'finance.manage',
+
+  // Verification
+  VERIFICATION_VIEW: 'verification.view',
+  VERIFICATION_MANAGE: 'verification.manage',
+
+  // Marketplace
+  MARKETPLACE_VIEW: 'marketplace.view',
+  MARKETPLACE_MODERATE: 'marketplace.moderate',
+
+  // Projects
+  PROJECTS_VIEW: 'projects.view',
+  PROJECTS_MANAGE: 'projects.manage',
+
+  // Subscriptions
+  SUBSCRIPTIONS_VIEW: 'subscriptions.view',
+  SUBSCRIPTIONS_MANAGE: 'subscriptions.manage',
+};
+
+const ADMIN_MODULES = {
+  DASHBOARD: 'dashboard',
+  USER_MANAGEMENT: 'user_management',
+  ADMIN_MANAGEMENT: 'admin_management',
+  PERMISSIONS: 'permissions',
+  FINANCE: 'finance',
+  VERIFICATION: 'verification',
+  MARKETPLACE: 'marketplace',
+  PROJECTS: 'projects',
+  SUBSCRIPTIONS: 'subscriptions',
+  MESSAGING: 'messaging',
+  NOTIFICATIONS: 'notifications',
+  ESCROW: 'escrow',
+  REPORTS: 'reports',
+  AUDIT_LOGS: 'audit_logs',
+  SETTINGS: 'settings',
+};
+
 module.exports = {
   TIER_LIMITS,
   ALLOWED_MIMETYPES,
@@ -63,4 +121,6 @@ module.exports = {
   LOGIN_STATUS,
   DATA_EXPORT_STATUS,
   SUPPORT_TICKET_STATUS,
+  ADMIN_PERMISSIONS,
+  ADMIN_MODULES,
 };

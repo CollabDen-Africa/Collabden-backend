@@ -21,7 +21,9 @@ const { initEscrowAutoRelease } = require("./jobs/escrowAutoRelease");
 const subscriptionRoutes = require("./modules/subscriptions/routes/subscription.route");
 const notificationSettingRoutes = require("./modules/notifications/routes/notificationSetting.route");
 const adminAuthRoutes = require("./modules/admin/routes/adminAuth.route");
-const adminUserRoutes = require("./modules/admin/routes/adminUser.route");
+const adminUsersRoutes = require("./modules/admin/routes/adminUsers.route");
+const adminPermissionsRoutes = require("./modules/admin/routes/adminPermissions.route");
+const adminProjectsRoutes = require("./modules/admin/routes/adminProjects.route");
 const app = express();
 const server = http.createServer(app);
 
@@ -61,7 +63,9 @@ app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/projects", escrowRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
 app.use("/api/v1/admin/auth", adminAuthRoutes);
-app.use("/api/v1/admin/users", adminUserRoutes);
+app.use("/api/v1/admin/users", adminUsersRoutes);
+app.use("/api/v1/admin/permissions", adminPermissionsRoutes);
+app.use("/api/v1/admin/projects", adminProjectsRoutes);
 
 app.use((err, req, res, next) => {
   // Handle JSON parsing errors from express.json()

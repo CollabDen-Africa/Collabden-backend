@@ -2,6 +2,7 @@ const catchAsync = require('../../../helpers/catchAsync');
 const {
   adminLoginService,
   adminVerify2FAService,
+  adminResend2FAService,
   adminLogoutService,
   adminForgotPasswordService,
   adminResetPasswordService,
@@ -42,6 +43,19 @@ const AdminAuthController = {
       });
     } catch (error) {
       res.status(401).json({
+        message: error.message,
+      });
+    }
+  }),
+
+  resend2FA: catchAsync(async (req, res) => {
+    try {
+      const { adminId } = req.body;
+      const result = await adminResend2FAService(adminId);
+      
+      return res.status(200).json(result);
+    } catch (error) {
+      res.status(400).json({
         message: error.message,
       });
     }
