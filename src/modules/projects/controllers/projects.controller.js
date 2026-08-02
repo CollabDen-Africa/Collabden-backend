@@ -9,6 +9,7 @@ const {
   getProjectMetadataService,
   getMarketplaceProjectsService,
   getMarketplaceProjectSummaryService,
+  reportProjectService,
 } = require("../services/projects.service");
 const { PROJECT_VISIBILITY } = require("../../../utils/constants");
 
@@ -185,6 +186,22 @@ const getMarketplaceSummary = async (req, res) => {
   }
 };
 
+const reportProject = async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const reporterId = req.user.id;
+    const reportData = req.body;
+
+    const report = await reportProjectService(projectId, reporterId, reportData);
+    res.status(201).json({
+      message: "Project reported successfully",
+      report,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -196,4 +213,5 @@ module.exports = {
   getProjectMetadata,
   getMarketplace,
   getMarketplaceSummary,
+  reportProject,
 }
