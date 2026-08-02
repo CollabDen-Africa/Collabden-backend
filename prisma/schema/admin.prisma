@@ -30,10 +30,10 @@ model AdminUser {
 
   // Audit Logs
   adminAuditLogs AdminAuditLog[]
+  adminNotes     AdminNote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  adminNotes AdminNote[]
 }
 
 model AdminNote {
@@ -51,15 +51,17 @@ model AdminNote {
 }
 
 model AdminAuditLog {
-  id        String   @id @default(cuid())
-  adminId   String
-  action    String
-  details   Json?
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  adminId      String
+  action       String
+  targetUserId String?
+  details      Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
 
-  admin AdminUser @relation(fields: [adminId], references: [id])
+  admin      AdminUser    @relation(fields: [adminId], references: [id])
+  targetUser UserProfile? @relation("UserAdminAuditLogs", fields: [targetUserId], references: [id], onDelete: SetNull)
 }
 
 model AdminRoleConfig {
