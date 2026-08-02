@@ -17,6 +17,7 @@ enum AccountStatus {
   DELETED
   SUSPENDED
   BANNED
+  RESTRICTED
 }
 
 model UserProfile {
@@ -110,9 +111,9 @@ model UserProfile {
   applications        ProjectApplication[]
   sentAppMessages     ApplicationMessage[]
 
-
-  // Admin Notes
-  adminNotes                   AdminNote[]
+  // Admin Portal relations
+  adminNotes     AdminNote[]
+  adminAuditLogs AdminAuditLog[] @relation("UserAdminAuditLogs")
 }
 
 model UserConnection {
