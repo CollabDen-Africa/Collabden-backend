@@ -4,23 +4,40 @@ const {
   getProjectActivity,
   getProjectReports,
   getAllProjectReports,
+  getReportById,
   updateProjectReportStatus,
   getProjectNotes,
   addProjectNote,
   getProjectAuditHistory,
+  moderateProject,
 } = require("../services/adminProjects.service");
 
 const getProjectsController = async (req, res) => {
   try {
-    const { page, limit, search, status, visibility, genre } = req.query;
-    
+    const {
+      page,
+      limit,
+      search,
+      status,
+      visibility,
+      genre,
+      dateCreatedStart,
+      dateCreatedEnd,
+      sortBy,
+      sortOrder,
+    } = req.query;
+
     const filters = {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
       search,
       status,
       visibility,
-      genre
+      genre,
+      dateCreatedStart,
+      dateCreatedEnd,
+      sortBy,
+      sortOrder,
     };
 
     const data = await getProjects(filters);
@@ -38,8 +55,8 @@ const getProjectByIdController = async (req, res) => {
     res.status(200).json(project);
   } catch (error) {
     console.error("Error in getProjectByIdController:", error);
-    res.status(error.message === "Project not found" ? 404 : 500).json({ 
-      error: error.message || "Failed to fetch project details" 
+    res.status(error.message === "Project not found" ? 404 : 500).json({
+      error: error.message || "Failed to fetch project details",
     });
   }
 };
@@ -48,12 +65,12 @@ const getProjectActivityController = async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, search, type } = req.query;
-    
+
     const query = {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
       search,
-      type
+      type,
     };
 
     const data = await getProjectActivity(id, query);
@@ -64,16 +81,48 @@ const getProjectActivityController = async (req, res) => {
   }
 };
 
+const getAllProjectReportsController = async (req, res) => {
+  try {
+    const { page, limit, search, status } = req.query;
+
+    const filters = {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10,
+      search,
+      status,
+    };
+
+    const data = await getAllProjectReports(filters);
+    res.status(200).json(data);
+  } catch (error) {
+    console.error("Error in getAllProjectReportsController:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch all reports" });
+  }
+};
+
+const getReportByIdController = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const report = await getReportById(reportId);
+    res.status(200).json(report);
+  } catch (error) {
+    console.error("Error in getReportByIdController:", error);
+    res.status(error.message === "Report not found" ? 404 : 500).json({
+      error: error.message || "Failed to fetch report details",
+    });
+  }
+};
+
 const getProjectReportsController = async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit, search, type } = req.query;
-    
+
     const query = {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
       search,
-      type
+      type,
     };
 
     const data = await getProjectReports(id, query);
@@ -88,7 +137,7 @@ const updateProjectReportStatusController = async (req, res) => {
   try {
     const { reportId } = req.params;
     const { status } = req.body;
-    
+
     if (!status) {
       return res.status(400).json({ error: "Status is required" });
     }
@@ -97,26 +146,8 @@ const updateProjectReportStatusController = async (req, res) => {
     res.status(200).json({ message: "Report status updated", report });
   } catch (error) {
     console.error("Error in updateProjectReportStatusController:", error);
-    res.status(500).json({ error: error.message || "Failed to update report status" });
-  }
-};
-
-const getAllProjectReportsController = async (req, res) => {
-  try {
-    const { page, limit, search, status } = req.query;
-    
-    const filters = {
-      page: parseInt(page) || 1,
-      limit: parseInt(limit) || 10,
-      search,
-      status
-    };
-
-    const data = await getAllProjectReports(filters);
-    res.status(200).json(data);
-  } catch (error) {
-    console.error("Error in getAllProjectReportsController:", error);
-    res.status(500).json({ error: error.message || "Failed to fetch all reports" });
+    const statusCode = error.message === "Report not found" ? 404 : 500;
+    res.status(statusCode).json({ error: error.message || "Failed to update report status" });
   }
 };
 
@@ -124,7 +155,7 @@ const getProjectNotesController = async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit } = req.query;
-    
+
     const query = {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
@@ -142,7 +173,7 @@ const addProjectNoteController = async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
-    const adminId = req.user?.id; // Admin middleware sets req.user
+    const adminId = req.user?.id;
 
     if (!content) {
       return res.status(400).json({ error: "Note content is required" });
@@ -155,7 +186,8 @@ const addProjectNoteController = async (req, res) => {
     res.status(201).json(note);
   } catch (error) {
     console.error("Error in addProjectNoteController:", error);
-    res.status(500).json({ error: error.message || "Failed to add project note" });
+    const statusCode = error.message === "Project not found" ? 404 : 500;
+    res.status(statusCode).json({ error: error.message || "Failed to add project note" });
   }
 };
 
@@ -163,7 +195,7 @@ const getProjectAuditHistoryController = async (req, res) => {
   try {
     const { id } = req.params;
     const { page, limit } = req.query;
-    
+
     const query = {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 10,
@@ -177,23 +209,11 @@ const getProjectAuditHistoryController = async (req, res) => {
   }
 };
 
-module.exports = {
-  getProjectsController,
-  getProjectByIdController,
-  getProjectActivityController,
-  getProjectReportsController,
-  getAllProjectReportsController,
-  updateProjectReportStatusController,
-  getProjectNotesController,
-  addProjectNoteController,
-  getProjectAuditHistoryController,
-};
-
 const moderateProjectController = async (req, res) => {
   try {
     const { id } = req.params;
     const { actionType, reason, additionalNotes, notifyOwner } = req.body;
-    const adminId = req.user?.id; // Admin middleware sets req.user
+    const adminId = req.user?.id;
 
     if (!actionType || !reason) {
       return res.status(400).json({ error: "actionType and reason are required" });
@@ -202,12 +222,21 @@ const moderateProjectController = async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { moderateProject } = require("../services/adminProjects.service");
-    const result = await moderateProject(adminId, id, { actionType, reason, additionalNotes, notifyOwner });
-    res.status(200).json(result);
+    const result = await moderateProject(adminId, id, {
+      actionType,
+      reason,
+      additionalNotes,
+      notifyOwner,
+    });
+
+    res.status(200).json({
+      message: `Project successfully ${actionType === "ARCHIVE" ? "archived" : "removed"}`,
+      project: result,
+    });
   } catch (error) {
     console.error("Error in moderateProjectController:", error);
-    res.status(500).json({ error: error.message || "Failed to moderate project" });
+    const statusCode = error.message === "Project not found" ? 404 : 500;
+    res.status(statusCode).json({ error: error.message || "Failed to moderate project" });
   }
 };
 
@@ -215,8 +244,9 @@ module.exports = {
   getProjectsController,
   getProjectByIdController,
   getProjectActivityController,
-  getProjectReportsController,
   getAllProjectReportsController,
+  getReportByIdController,
+  getProjectReportsController,
   updateProjectReportStatusController,
   getProjectNotesController,
   addProjectNoteController,
