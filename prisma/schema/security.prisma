@@ -100,13 +100,15 @@ model Report {
   reporterId     String
   reportedUserId String?
   projectId      String?
+  agreementId    String?
   reason         String
   description    String?
   status         ReportStatus @default(OPEN)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  reporter     UserProfile  @relation("ReportReporter", fields: [reporterId], references: [id])
-  reportedUser UserProfile? @relation("ReportReportedUser", fields: [reportedUserId], references: [id])
-  project      Project?     @relation(fields: [projectId], references: [id])
+  reporter     UserProfile    @relation("ReportReporter", fields: [reporterId], references: [id])
+  reportedUser UserProfile?   @relation("ReportReportedUser", fields: [reportedUserId], references: [id])
+  project      Project?       @relation(fields: [projectId], references: [id])
+  agreement    LegalAgreement? @relation(fields: [agreementId], references: [id])
 }

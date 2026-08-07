@@ -37,17 +37,19 @@ model AdminUser {
 }
 
 model AdminNote {
-  id              String       @id @default(cuid())
-  adminId         String
-  targetUserId    String?
-  targetProjectId String?
-  content         String
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                String          @id @default(cuid())
+  adminId           String
+  targetUserId      String?
+  targetProjectId   String?
+  targetAgreementId String?
+  content           String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
-  admin           AdminUser    @relation(fields: [adminId], references: [id])
-  targetUser      UserProfile? @relation(fields: [targetUserId], references: [id])
-  targetProject   Project?     @relation(fields: [targetProjectId], references: [id])
+  admin             AdminUser       @relation(fields: [adminId], references: [id])
+  targetUser        UserProfile?    @relation(fields: [targetUserId], references: [id])
+  targetProject     Project?        @relation(fields: [targetProjectId], references: [id])
+  targetAgreement   LegalAgreement? @relation(fields: [targetAgreementId], references: [id])
 }
 
 model AdminAuditLog {
