@@ -57,6 +57,8 @@ model LegalAgreement {
   updatedAt     DateTime             @updatedAt
   signatures    AgreementSignature[]
   escrows       Escrow[]
+  reports       Report[]
+  adminNotes    AdminNote[]
 }
 
 model AgreementSignature {

@@ -25,6 +25,7 @@ const adminUsersRoutes = require("./modules/admin/routes/adminUsers.route");
 const adminPermissionsRoutes = require("./modules/admin/routes/adminPermissions.route");
 const adminProjectsRoutes = require("./modules/admin/routes/adminProjects.route");
 const adminMarketplaceRoutes = require("./modules/admin/routes/adminMarketplace.route");
+const adminAgreementsRoutes = require("./modules/admin/routes/adminAgreements.route");
 const app = express();
 const server = http.createServer(app);
 
@@ -68,6 +69,7 @@ app.use("/api/v1/admin/users", adminUsersRoutes);
 app.use("/api/v1/admin/permissions", adminPermissionsRoutes);
 app.use("/api/v1/admin/projects", adminProjectsRoutes);
 app.use("/api/v1/admin/marketplace", adminMarketplaceRoutes);
+app.use("/api/v1/admin/agreements", adminAgreementsRoutes);
 
 app.use((err, req, res, next) => {
   // Handle JSON parsing errors from express.json()
