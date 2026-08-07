@@ -91,6 +91,10 @@ const ADMIN_PERMISSIONS = {
   PROJECTS_VIEW: 'projects.view',
   PROJECTS_MANAGE: 'projects.manage',
 
+  // Agreements
+  AGREEMENTS_VIEW: 'agreements.view',
+  AGREEMENTS_MANAGE: 'agreements.manage',
+
   // Subscriptions
   SUBSCRIPTIONS_VIEW: 'subscriptions.view',
   SUBSCRIPTIONS_MANAGE: 'subscriptions.manage',
@@ -105,6 +109,7 @@ const ADMIN_MODULES = {
   VERIFICATION: 'verification',
   MARKETPLACE: 'marketplace',
   PROJECTS: 'projects',
+  AGREEMENTS: 'agreements',
   SUBSCRIPTIONS: 'subscriptions',
   MESSAGING: 'messaging',
   NOTIFICATIONS: 'notifications',
