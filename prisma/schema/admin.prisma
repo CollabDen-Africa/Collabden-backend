@@ -42,6 +42,7 @@ model AdminNote {
   targetUserId      String?
   targetProjectId   String?
   targetAgreementId String?
+  targetDisputeId   String?
   content           String
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -50,6 +51,7 @@ model AdminNote {
   targetUser        UserProfile?    @relation(fields: [targetUserId], references: [id])
   targetProject     Project?        @relation(fields: [targetProjectId], references: [id])
   targetAgreement   LegalAgreement? @relation(fields: [targetAgreementId], references: [id])
+  targetDispute     Dispute?        @relation(fields: [targetDisputeId], references: [id])
 }
 
 model AdminAuditLog {

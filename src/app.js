@@ -26,6 +26,11 @@ const adminPermissionsRoutes = require("./modules/admin/routes/adminPermissions.
 const adminProjectsRoutes = require("./modules/admin/routes/adminProjects.route");
 const adminMarketplaceRoutes = require("./modules/admin/routes/adminMarketplace.route");
 const adminAgreementsRoutes = require("./modules/admin/routes/adminAgreements.route");
+const adminTransactionsRoutes = require("./modules/admin/routes/adminTransactions.route");
+const adminEscrowRoutes = require("./modules/admin/routes/adminEscrow.route");
+const adminDisputesRoutes = require("./modules/admin/routes/adminDisputes.route");
+const adminWithdrawalsRoutes = require("./modules/admin/routes/adminWithdrawals.route");
+const adminPaymentReportsRoutes = require("./modules/admin/routes/adminPaymentReports.route");
 const app = express();
 const server = http.createServer(app);
 
@@ -70,6 +75,11 @@ app.use("/api/v1/admin/permissions", adminPermissionsRoutes);
 app.use("/api/v1/admin/projects", adminProjectsRoutes);
 app.use("/api/v1/admin/marketplace", adminMarketplaceRoutes);
 app.use("/api/v1/admin/agreements", adminAgreementsRoutes);
+app.use("/api/v1/admin/transactions", adminTransactionsRoutes);
+app.use("/api/v1/admin/escrow", adminEscrowRoutes);
+app.use("/api/v1/admin/disputes", adminDisputesRoutes);
+app.use("/api/v1/admin/finance", adminWithdrawalsRoutes);
+app.use("/api/v1/admin/payments", adminPaymentReportsRoutes);
 
 app.use((err, req, res, next) => {
   // Handle JSON parsing errors from express.json()
