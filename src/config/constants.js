@@ -98,6 +98,17 @@ const ADMIN_PERMISSIONS = {
   // Subscriptions
   SUBSCRIPTIONS_VIEW: 'subscriptions.view',
   SUBSCRIPTIONS_MANAGE: 'subscriptions.manage',
+
+  // Payments & Escrow
+  PAYMENTS_VIEW: 'payments.view',
+  PAYMENTS_MANAGE: 'payments.manage',
+
+  // Escrow
+  ESCROW_VIEW: 'escrow.view',
+
+  // Disputes
+  DISPUTES_VIEW: 'disputes.view',
+  DISPUTES_MANAGE: 'disputes.manage',
 };
 
 const ADMIN_MODULES = {

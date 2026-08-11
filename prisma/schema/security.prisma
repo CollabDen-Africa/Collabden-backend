@@ -22,6 +22,8 @@ enum IdentityVerificationStatus {
 
 enum DisputeStatus {
   OPEN
+  UNDER_REVIEW
+  AWAITING_RESPONSE
   RESOLVED
   CLOSED
 }
@@ -93,6 +95,7 @@ model Dispute {
   reporter     UserProfile  @relation("DisputeReporter", fields: [reporterId], references: [id])
   reportedUser UserProfile? @relation("DisputeReportedUser", fields: [reportedUserId], references: [id])
   project      Project?     @relation(fields: [projectId], references: [id])
+  adminNotes   AdminNote[]
 }
 
 model Report {
