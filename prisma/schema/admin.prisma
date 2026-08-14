@@ -28,9 +28,16 @@ model AdminUser {
   twoFactorCode       String?
   twoFactorCodeExpiry DateTime?
 
-  // Audit Logs
+  // Audit Logs & Notes
   adminAuditLogs AdminAuditLog[]
   adminNotes     AdminNote[]
+
+  // Dispute Management Relations
+  assignedDisputes        Dispute[]                @relation("AssignedDisputes")
+  disputeDecisions        DisputeDecision[]
+  disputeEvidenceRequests DisputeEvidenceRequest[]
+  disputeMessages         DisputeMessage[]
+  disputeAuditLogs        DisputeAuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
