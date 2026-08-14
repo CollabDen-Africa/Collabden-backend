@@ -106,6 +106,9 @@ model UserProfile {
   disputesAgainst     Dispute[] @relation("DisputeReportedUser")
   reportsFiled        Report[]  @relation("ReportReporter")
   reportsAgainst      Report[]  @relation("ReportReportedUser")
+  disputeEvidenceRequests DisputeEvidenceRequest[]
+  sentDisputeMessages     DisputeMessage[]
+  disputeAuditLogs        DisputeAuditLog[]
 
   // Project Applications
   applications        ProjectApplication[]

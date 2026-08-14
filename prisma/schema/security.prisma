@@ -28,6 +28,14 @@ enum DisputeStatus {
   CLOSED
 }
 
+enum DisputeCategory {
+  PAYMENT
+  ESCROW_MILESTONE
+  AGREEMENT_RELATED
+  PROJECT_COLLABORATION
+  USER_CONDUCT
+}
+
 enum ReportStatus {
   OPEN
   REVIEWED
@@ -82,20 +90,110 @@ model IdentityVerificationRequest {
 }
 
 model Dispute {
-  id             String        @id @default(cuid())
-  reporterId     String
-  reportedUserId String?
-  projectId      String?
-  reason         String
-  description    String?
-  status         DisputeStatus @default(OPEN)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id              String                 @id @default(cuid())
+  reporterId      String
+  reportedUserId  String?
+  projectId       String?
+  transactionId   String?
+  assignedAdminId String?
+  category        DisputeCategory        @default(PROJECT_COLLABORATION)
+  reason          String
+  description     String?
+  evidence        Json?                  @default("[]")
+  status          DisputeStatus          @default(OPEN)
+  isFinalized     Boolean                @default(false)
+  resolvedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
-  reporter     UserProfile  @relation("DisputeReporter", fields: [reporterId], references: [id])
-  reportedUser UserProfile? @relation("DisputeReportedUser", fields: [reportedUserId], references: [id])
-  project      Project?     @relation(fields: [projectId], references: [id])
-  adminNotes   AdminNote[]
+  reporter         UserProfile              @relation("DisputeReporter", fields: [reporterId], references: [id])
+  reportedUser     UserProfile?             @relation("DisputeReportedUser", fields: [reportedUserId], references: [id])
+  project          Project?                 @relation(fields: [projectId], references: [id])
+  assignedAdmin    AdminUser?               @relation("AssignedDisputes", fields: [assignedAdminId], references: [id])
+  adminNotes       AdminNote[]
+  messages         DisputeMessage[]
+  evidenceRequests DisputeEvidenceRequest[]
+  decision         DisputeDecision?
+  auditLogs        DisputeAuditLog[]
+
+  @@index([reporterId])
+  @@index([reportedUserId])
+  @@index([projectId])
+  @@index([assignedAdminId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model DisputeDecision {
+  id                  String   @id @default(cuid())
+  disputeId           String   @unique
+  adminId             String
+  resolutionSummary   String
+  outcome             String
+  supportingNotes     String?
+  financialAdjustment Json?    @default("{}")
+  resolvedAt          DateTime @default(now())
+  createdAt           DateTime @default(now())
+
+  dispute Dispute   @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  admin   AdminUser @relation(fields: [adminId], references: [id])
+}
+
+model DisputeEvidenceRequest {
+  id             String      @id @default(cuid())
+  disputeId      String
+  adminId        String
+  requestedFrom  String
+  requestDetails String
+  dueDate        DateTime?
+  status         String      @default("PENDING")
+  responseNote   String?
+  submittedFiles Json?       @default("[]")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  dispute    Dispute     @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  admin      AdminUser   @relation(fields: [adminId], references: [id])
+  targetUser UserProfile @relation(fields: [requestedFrom], references: [id])
+
+  @@index([disputeId])
+}
+
+model DisputeMessage {
+  id            String       @id @default(cuid())
+  disputeId     String
+  senderAdminId String?
+  senderUserId  String?
+  message       String
+  attachments   Json?        @default("[]")
+  isInternal    Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+
+  dispute     Dispute      @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  senderAdmin AdminUser?   @relation(fields: [senderAdminId], references: [id])
+  senderUser  UserProfile? @relation(fields: [senderUserId], references: [id])
+
+  @@index([disputeId])
+}
+
+model DisputeAuditLog {
+  id             String         @id @default(cuid())
+  disputeId      String
+  adminId        String?
+  userId         String?
+  action         String
+  previousStatus DisputeStatus?
+  newStatus      DisputeStatus?
+  details        Json?          @default("{}")
+  createdAt      DateTime       @default(now())
+
+  dispute Dispute      @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  admin   AdminUser?   @relation(fields: [adminId], references: [id])
+  user    UserProfile? @relation(fields: [userId], references: [id])
+
+  @@index([disputeId])
+  @@index([createdAt])
 }
 
 model Report {
