@@ -39,6 +39,9 @@ model AdminUser {
   disputeMessages         DisputeMessage[]
   disputeAuditLogs        DisputeAuditLog[]
 
+  // Verification Management Relations
+  reviewedVerificationRequests IdentityVerificationRequest[] @relation("ReviewedVerificationRequests")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
