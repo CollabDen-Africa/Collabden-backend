@@ -18,6 +18,8 @@ enum IdentityVerificationStatus {
   PENDING
   APPROVED
   REJECTED
+  EXPIRED
+  INCOMPLETE
 }
 
 enum DisputeStatus {
@@ -78,15 +80,25 @@ model SupportTicket {
 }
 
 model IdentityVerificationRequest {
-  id        String                     @id @default(cuid())
-  userId    String
-  status    IdentityVerificationStatus @default(PENDING)
-  documents Json? // Array of document URLs
-  notes     String?
-  createdAt DateTime                   @default(now())
-  updatedAt DateTime                   @updatedAt
+  id                String                     @id @default(cuid())
+  userId            String
+  status            IdentityVerificationStatus @default(PENDING)
+  verificationType  String                     @default("GOVERNMENT_ID")
+  documents         Json?                      // Array of document URLs
+  notes             String?
+  rejectionReason   String?
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
 
-  user UserProfile @relation(fields: [userId], references: [id])
+  user       UserProfile @relation(fields: [userId], references: [id])
+  reviewedBy AdminUser?  @relation("ReviewedVerificationRequests", fields: [reviewedByAdminId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([verificationType])
+  @@index([createdAt])
 }
 
 model Dispute {

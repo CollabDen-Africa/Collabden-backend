@@ -6,7 +6,8 @@
   "scripts": {
     "build": "prisma generate",
     "dev": "nodemon src/app.js",
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "test": "node tests/adminVerification.test.js"
   },
   "repository": {
     "type": "git",
