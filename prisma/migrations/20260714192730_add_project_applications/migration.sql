@@ -56,7 +56,6 @@ CREATE TYPE "AccountStatus" AS ENUM ('ACTIVE', 'DEACTIVATED', 'DELETED');
 -- multiple migrations, each migration adding only one value to
 -- the enum.
 
-
 ALTER TYPE "AgreementStatus" ADD VALUE 'DRAFT';
 ALTER TYPE "AgreementStatus" ADD VALUE 'PENDING_SIGNATURE';
 
