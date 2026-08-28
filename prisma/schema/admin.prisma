@@ -32,6 +32,12 @@ model AdminUser {
   adminAuditLogs AdminAuditLog[]
   adminNotes     AdminNote[]
 
+  // Support Ticket Relations
+  assignedSupportTickets  SupportTicket[]          @relation("AssignedSupportTickets")
+  resolvedSupportTickets  SupportTicket[]          @relation("ResolvedSupportTickets")
+  supportTicketMessages   SupportTicketMessage[]   @relation("SupportTicketMessages")
+  supportAuditLogs        SupportTicketAuditLog[]  @relation("SupportAuditLogs")
+
   // Dispute Management Relations
   assignedDisputes        Dispute[]                @relation("AssignedDisputes")
   disputeDecisions        DisputeDecision[]
