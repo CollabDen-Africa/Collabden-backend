@@ -23,15 +23,48 @@ enum PaymentMethodType {
   BANK_TRANSFER
 }
 
+enum SubscriptionActivityType {
+  UPGRADE
+  DOWNGRADE
+  CANCELLATION
+  RENEWAL
+  INITIAL_SUBSCRIBE
+}
+
+enum PaymentRetryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum SubscriptionIssueStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum SubscriptionIssueCategory {
+  BILLING_ERROR
+  PAYMENT_FAILED
+  PLAN_ACCESS_ISSUE
+  REFUND_REQUEST
+  CANCELLATION_ISSUE
+  OTHER
+}
+
 //SubscriptionPlan
 
 model SubscriptionPlan {
   id           String           @id @default(cuid())
   tier         SubscriptionTier @unique
   name         String
+  description  String?
   priceMonthly Int
   priceAnnual  Int
   features     String[]
+  limits       Json?            @default("{}")
+  isActive     Boolean          @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -49,21 +82,27 @@ model Subscription {
   cancelAtPeriodEnd  Boolean   @default(false)
   canceledAt         DateTime?
 
-  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  user           UserProfile                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices       Invoice[]
+  activities     SubscriptionActivity[]
+  paymentRetries SubscriptionPaymentRetry[]
+  issues         SubscriptionIssue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
 }
 
 model Invoice {
-  id            String        @id @default(cuid())
-  invoiceNumber String        @unique
-  userId        String
-  amount        Decimal       @db.Decimal(12, 2)
-  currency      String        @default("NGN")
-  status        InvoiceStatus @default(PENDING)
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
+  userId         String
+  subscriptionId String?
+  amount         Decimal       @db.Decimal(12, 2)
+  currency       String        @default("NGN")
+  status         InvoiceStatus @default(PENDING)
 
   billingCycle BillingCycle
   tier         SubscriptionTier
@@ -74,12 +113,17 @@ model Invoice {
   hostedInvoiceUrl String?
   pdfUrl           String?
 
-  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  user           UserProfile                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription   Subscription?              @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  paymentRetries SubscriptionPaymentRetry[]
+  issues         SubscriptionIssue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([invoiceNumber])
+  @@index([subscriptionId])
 }
 
 model SavedPaymentMethod {
@@ -104,3 +148,72 @@ model SavedPaymentMethod {
 
   @@index([userId])
 }
+
+model SubscriptionActivity {
+  id             String                   @id @default(cuid())
+  subscriptionId String
+  userId         String
+  type           SubscriptionActivityType
+  fromTier       SubscriptionTier?
+  toTier         SubscriptionTier?
+  amount         Decimal?                 @db.Decimal(12, 2)
+  currency       String                   @default("NGN")
+  reason         String?
+  metadata       Json?                    @default("{}")
+  createdAt      DateTime                 @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user         UserProfile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([userId])
+  @@index([type])
+}
+
+model SubscriptionPaymentRetry {
+  id             String             @id @default(cuid())
+  subscriptionId String?
+  userId         String
+  invoiceId      String?
+  amount         Decimal            @db.Decimal(12, 2)
+  currency       String             @default("NGN")
+  attemptNumber  Int                @default(1)
+  status         PaymentRetryStatus @default(PENDING)
+  failureReason  String?
+  txRef          String?
+  nextAttemptAt  DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  user         UserProfile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+model SubscriptionIssue {
+  id             String                    @id @default(cuid())
+  userId         String
+  subscriptionId String?
+  invoiceId      String?
+  category       SubscriptionIssueCategory @default(BILLING_ERROR)
+  title          String
+  description    String
+  status         SubscriptionIssueStatus   @default(OPEN)
+  resolvedAt     DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  user         UserProfile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  adminNotes   AdminNote[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([category])
+}
+

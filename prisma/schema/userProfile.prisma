@@ -78,9 +78,12 @@ model UserProfile {
   auditLogs AuditLog[]
 
   // Subscriptions
-  subscription        Subscription?
-  invoices            Invoice[]
-  savedPaymentMethods SavedPaymentMethod[]
+  subscription               Subscription?
+  invoices                   Invoice[]
+  savedPaymentMethods        SavedPaymentMethod[]
+  subscriptionActivities     SubscriptionActivity[]
+  subscriptionPaymentRetries SubscriptionPaymentRetry[]
+  subscriptionIssues         SubscriptionIssue[]
 
   // Wallet & Payments
   wallet         Wallet?
