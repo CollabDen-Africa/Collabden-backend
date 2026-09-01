@@ -32,6 +32,7 @@ const adminDisputesRoutes = require("./modules/admin/routes/adminDisputes.route"
 const adminWithdrawalsRoutes = require("./modules/admin/routes/adminWithdrawals.route");
 const adminPaymentReportsRoutes = require("./modules/admin/routes/adminPaymentReports.route");
 const adminVerificationRoutes = require("./modules/admin/routes/adminVerification.route");
+const adminSubscriptionsRoutes = require("./modules/admin/routes/adminSubscriptions.route");
 const adminSupportTicketsRoutes = require("./modules/admin/routes/adminSupportTickets.route");
 const app = express();
 const server = http.createServer(app);
@@ -83,6 +84,7 @@ app.use("/api/v1/admin/disputes", adminDisputesRoutes);
 app.use("/api/v1/admin/finance", adminWithdrawalsRoutes);
 app.use("/api/v1/admin/payments", adminPaymentReportsRoutes);
 app.use("/api/v1/admin/verification", adminVerificationRoutes);
+app.use("/api/v1/admin/subscriptions", adminSubscriptionsRoutes);
 app.use("/api/v1/admin/support-tickets", adminSupportTicketsRoutes);
 
 app.use((err, req, res, next) => {
