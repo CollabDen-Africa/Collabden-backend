@@ -3,6 +3,7 @@ const { publishEvent } = require("../../../events/publisher");
 const EVENT_TYPES = require("../../../events/eventTypes");
 const walletService = require("./wallet.service");
 const flutterwaveService = require("./flutterwave.service");
+const { getPlatformPaymentSettings } = require("../../../services/platformSettings.service");
 
 /**
  * Request a withdrawal from wallet to a registered bank account.
@@ -27,9 +28,16 @@ const requestWithdrawal = async (userId, bankAccountId, amount) => {
     throw new Error("Insufficient wallet balance for this withdrawal.");
   }
 
-  // 3. Minimum withdrawal threshold (₦1,000)
-  if (amount < 1000) {
-    throw new Error("Minimum withdrawal amount is ₦1,000.");
+  // 3. Enforce the live administrator-approved withdrawal limits.
+  const paymentSettings = await getPlatformPaymentSettings();
+  const minimumWithdrawalAmount = Number(paymentSettings.minimumWithdrawalAmount);
+  const maximumWithdrawalAmount = Number(paymentSettings.maximumWithdrawalAmount);
+
+  if (amount < minimumWithdrawalAmount) {
+    throw new Error(`Minimum withdrawal amount is ₦${minimumWithdrawalAmount.toLocaleString()}.`);
+  }
+  if (amount > maximumWithdrawalAmount) {
+    throw new Error(`Maximum withdrawal amount is ₦${maximumWithdrawalAmount.toLocaleString()}.`);
   }
 
   // 4. Generate reference and debit wallet

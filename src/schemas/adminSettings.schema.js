@@ -129,6 +129,45 @@ const marketplaceSettingsSchema = z.object({
   enableSkillBasedSearch:    z.boolean().optional(),
 });
 
+const paymentMethodSchema = z.enum(["CARD", "BANK_TRANSFER", "USSD"]);
+
+const paymentSettingsSchema = z
+  .object({
+    transactionFeePercentage: z.number().min(0).max(100).optional(),
+    transactionFeeFixed: z.number().min(0).max(1000000).optional(),
+    minimumWithdrawalAmount: z.number().positive().max(100000000).optional(),
+    maximumWithdrawalAmount: z.number().positive().max(100000000).optional(),
+    supportedPaymentMethods: z
+      .array(paymentMethodSchema)
+      .min(1, "At least one payment method must be supported.")
+      .max(3)
+      .refine((methods) => new Set(methods).size === methods.length, {
+        message: "Supported payment methods must not contain duplicates.",
+      })
+      .optional(),
+    currency: z.literal("NGN").optional(),
+    confirmation: z.object({
+      confirmed: z.literal(true, {
+        error: "Financial configuration changes require explicit confirmation.",
+      }),
+      expectedVersion: z.number().int().positive(),
+    }),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (
+      data.minimumWithdrawalAmount !== undefined &&
+      data.maximumWithdrawalAmount !== undefined &&
+      data.minimumWithdrawalAmount > data.maximumWithdrawalAmount
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maximumWithdrawalAmount"],
+        message: "maximumWithdrawalAmount must be greater than or equal to minimumWithdrawalAmount.",
+      });
+    }
+  });
+
 module.exports = {
   adminSettingsSchema,
   getSettingsAuditQuerySchema,
@@ -136,4 +175,5 @@ module.exports = {
   notificationSettingsSchema,
   publishAnnouncementSchema,
   marketplaceSettingsSchema,
+  paymentSettingsSchema,
 };

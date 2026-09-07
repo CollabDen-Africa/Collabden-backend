@@ -229,6 +229,14 @@ const SETTINGS_CATEGORY_MAP = {
   searchResultsPerPage:             "Search and Discovery",
   enableLocationBasedSearch:        "Search and Discovery",
   enableSkillBasedSearch:           "Search and Discovery",
+
+  // Payment Settings
+  transactionFeePercentage: "Platform Transaction Fees",
+  transactionFeeFixed:      "Platform Transaction Fees",
+  minimumWithdrawalAmount:  "Withdrawal Limits",
+  maximumWithdrawalAmount:  "Withdrawal Limits",
+  supportedPaymentMethods:  "Supported Payment Methods",
+  currency:                 "Payment Configuration",
 };
 
 module.exports = {

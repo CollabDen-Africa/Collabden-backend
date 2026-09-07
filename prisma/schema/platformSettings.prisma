@@ -148,3 +148,18 @@ model PlatformMarketplaceSettings {
   updatedAt DateTime @updatedAt
   updatedBy String?
 }
+
+// Operational settings only. Payment-provider credentials remain in
+// environment-managed secret storage and are never persisted by this model.
+model PlatformPaymentSettings {
+  id                      String   @id @default("singleton")
+  transactionFeePercentage Decimal  @default(0) @db.Decimal(5, 2)
+  transactionFeeFixed      Decimal  @default(0) @db.Decimal(12, 2)
+  minimumWithdrawalAmount  Decimal  @default(1000) @db.Decimal(12, 2)
+  maximumWithdrawalAmount  Decimal  @default(1000000) @db.Decimal(12, 2)
+  supportedPaymentMethods  String[] @default(["CARD", "BANK_TRANSFER", "USSD"])
+  currency                 String   @default("NGN")
+  version                  Int      @default(1)
+  updatedAt                DateTime @updatedAt
+  updatedBy                String?
+}

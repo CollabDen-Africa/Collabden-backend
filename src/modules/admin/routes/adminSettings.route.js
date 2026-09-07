@@ -12,6 +12,10 @@ const {
   getMarketplaceSettingsController,
   updateMarketplaceSettingsController,
 } = require("../controllers/adminSettings.controller");
+const {
+  getPaymentSettingsController,
+  updatePaymentSettingsController,
+} = require("../controllers/adminPaymentSettings.controller");
 const { adminMiddleware } = require("../../../middleware/admin.middleware");
 const { checkPermission } = require("../../../middleware/checkPermission.middleware");
 const validateRequest = require("../../../middleware/validateRequest");
@@ -22,6 +26,7 @@ const {
   notificationSettingsSchema,
   publishAnnouncementSchema,
   marketplaceSettingsSchema,
+  paymentSettingsSchema,
 } = require("../../../schemas/adminSettings.schema");
 const { ADMIN_PERMISSIONS } = require("../../../config/constants");
 
@@ -421,6 +426,82 @@ router.patch(
   checkPermission(ADMIN_PERMISSIONS.SETTINGS_MANAGE),
   validateRequest(marketplaceSettingsSchema),
   updateMarketplaceSettingsController
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/settings/payment:
+ *   get:
+ *     summary: Retrieve approved payment configuration without provider credentials
+ *     tags: [Admin Payment Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Payment configuration retrieved successfully
+ *       403:
+ *         description: Administrator does not have payments.view permission
+ *   patch:
+ *     summary: Update payment fees, withdrawal limits, and payment methods
+ *     description: Requires payments.manage permission and explicit confirmation with the currently retrieved configuration version.
+ *     tags: [Admin Payment Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [confirmation]
+ *             properties:
+ *               transactionFeePercentage:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 100
+ *               transactionFeeFixed:
+ *                 type: number
+ *                 minimum: 0
+ *               minimumWithdrawalAmount:
+ *                 type: number
+ *                 exclusiveMinimum: 0
+ *               maximumWithdrawalAmount:
+ *                 type: number
+ *                 exclusiveMinimum: 0
+ *               supportedPaymentMethods:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [CARD, BANK_TRANSFER, USSD]
+ *               confirmation:
+ *                 type: object
+ *                 required: [confirmed, expectedVersion]
+ *                 properties:
+ *                   confirmed:
+ *                     type: boolean
+ *                     enum: [true]
+ *                   expectedVersion:
+ *                     type: integer
+ *     responses:
+ *       200:
+ *         description: Payment configuration updated and audit logged
+ *       400:
+ *         description: Invalid configuration or missing confirmation
+ *       409:
+ *         description: Configuration changed after the administrator reviewed it
+ *       403:
+ *         description: Administrator does not have payments.manage permission
+ */
+router.get(
+  "/payment",
+  checkPermission(ADMIN_PERMISSIONS.PAYMENTS_VIEW),
+  getPaymentSettingsController
+);
+router.patch(
+  "/payment",
+  checkPermission(ADMIN_PERMISSIONS.PAYMENTS_MANAGE),
+  validateRequest(paymentSettingsSchema),
+  updatePaymentSettingsController
 );
 
 module.exports = router;

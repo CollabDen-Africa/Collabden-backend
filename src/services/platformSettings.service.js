@@ -92,6 +92,36 @@ const invalidatePlatformMarketplaceSettingsCache = () => {
   _marketplaceSettingsCachedAt = 0;
 };
 
+// ── PlatformPaymentSettings cache ───────────────────────────────────────────
+let _paymentSettingsCache = null;
+let _paymentSettingsCachedAt = 0;
+
+const getPlatformPaymentSettings = async () => {
+  const now = Date.now();
+  if (_paymentSettingsCache && now - _paymentSettingsCachedAt < CACHE_TTL_MS) {
+    return _paymentSettingsCache;
+  }
+
+  let settings = await prisma.platformPaymentSettings.findUnique({
+    where: { id: "singleton" },
+  });
+
+  if (!settings) {
+    settings = await prisma.platformPaymentSettings.create({
+      data: { id: "singleton" },
+    });
+  }
+
+  _paymentSettingsCache = settings;
+  _paymentSettingsCachedAt = now;
+  return settings;
+};
+
+const invalidatePlatformPaymentSettingsCache = () => {
+  _paymentSettingsCache = null;
+  _paymentSettingsCachedAt = 0;
+};
+
 module.exports = {
   getPlatformUserSettings,
   invalidatePlatformUserSettingsCache,
@@ -99,4 +129,6 @@ module.exports = {
   invalidatePlatformGeneralSettingsCache,
   getPlatformMarketplaceSettings,
   invalidatePlatformMarketplaceSettingsCache,
+  getPlatformPaymentSettings,
+  invalidatePlatformPaymentSettingsCache,
 };

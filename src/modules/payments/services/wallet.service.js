@@ -1,4 +1,5 @@
 const prisma = require("../../../config/prismaClient");
+const { getPlatformPaymentSettings } = require("../../../services/platformSettings.service");
 const { publishEvent } = require("../../../events/publisher");
 const EVENT_TYPES = require("../../../events/eventTypes");
 const flutterwaveService = require("./flutterwave.service");
@@ -200,6 +201,17 @@ const debitWallet = async (userId, amount, type, reference, description = null, 
  * @returns {object} { paymentLink, txRef }
  */
 const initializeFunding = async (userId, amount, paymentMethod) => {
+  const paymentSettings = await getPlatformPaymentSettings();
+  const configuredMethod = {
+    card: "CARD",
+    banktransfer: "BANK_TRANSFER",
+    ussd: "USSD",
+  }[paymentMethod];
+
+  if (!paymentSettings.supportedPaymentMethods.includes(configuredMethod)) {
+    throw new Error("The selected payment method is not currently supported.");
+  }
+
   // 1. Get user email
   const user = await prisma.userProfile.findUnique({
     where: { id: userId },

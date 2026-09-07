@@ -37,7 +37,7 @@ const requestWithdrawalSchema = z.object({
     .min(1, "Bank account ID is required"),
   amount: z
     .number({ required_error: "Amount is required" })
-    .min(1000, "Minimum withdrawal amount is ₦1,000"),
+    .positive("Withdrawal amount must be greater than zero"),
 });
 
 module.exports = {
