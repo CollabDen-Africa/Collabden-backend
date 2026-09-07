@@ -31,6 +31,7 @@ model AdminUser {
   // Audit Logs & Notes
   adminAuditLogs AdminAuditLog[]
   adminNotes     AdminNote[]
+  settingsAuditLogs SettingsAuditLog[]
 
   // Support Ticket Relations
   assignedSupportTickets  SupportTicket[]          @relation("AssignedSupportTickets")

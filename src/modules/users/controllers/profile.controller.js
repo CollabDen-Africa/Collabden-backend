@@ -1,5 +1,8 @@
 const prisma = require('../../../config/prismaClient');
 const bcrypt = require("bcryptjs");
+const path = require("path");
+const supabase = require("../../../config/supabase");
+const AVATAR_BUCKET = "user-avatars";
 
 /**
  * Update general profile info (display name, bio, skills, social links, etc.)
@@ -9,9 +12,18 @@ const updateProfile = async (req, res) => {
     const userId = req.user.id;
 
     const ALLOWED_FIELDS = [
-      "legalName", "displayName", "firstName", "lastName",
-      "avatarUrl", "bio", "experience", "skills", "genres",
-      "portfolioLinks", "socialLinks", "openToCollaborate",
+      "legalName",
+      "displayName",
+      "firstName",
+      "lastName",
+      "avatarUrl",
+      "bio",
+      "experience",
+      "skills",
+      "genres",
+      "portfolioLinks",
+      "socialLinks",
+      "openToCollaborate",
     ];
 
     // Strip any fields not in the allowed list (extra security layer on top of Zod)
@@ -20,10 +32,14 @@ const updateProfile = async (req, res) => {
     );
 
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ error: "No valid fields provided for update" });
+      return res
+        .status(400)
+        .json({ error: "No valid fields provided for update" });
     }
 
-    const oldProfile = await prisma.userProfile.findUnique({ where: { id: userId } });
+    const oldProfile = await prisma.userProfile.findUnique({
+      where: { id: userId },
+    });
 
     if (!oldProfile) {
       return res.status(404).json({ error: "Profile not found" });
@@ -42,7 +58,9 @@ const updateProfile = async (req, res) => {
       },
     });
 
-    res.status(200).json({ message: "Profile updated successfully", profile: newProfile });
+    res
+      .status(200)
+      .json({ message: "Profile updated successfully", profile: newProfile });
   } catch (error) {
     console.error("Error updating profile:", error);
     res.status(500).json({ error: "Failed to update profile" });
@@ -67,18 +85,26 @@ const updateEmail = async (req, res) => {
     // Google OAuth users have no password — block direct email change
     if (!user.password) {
       return res.status(400).json({
-        error: "Email cannot be changed directly for accounts linked via Google. Use Google account settings.",
+        error:
+          "Email cannot be changed directly for accounts linked via Google. Use Google account settings.",
       });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordCorrect = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
     if (!isPasswordCorrect) {
       return res.status(401).json({ error: "Current password is incorrect" });
     }
 
-    const emailTaken = await prisma.userProfile.findUnique({ where: { email: newEmail } });
+    const emailTaken = await prisma.userProfile.findUnique({
+      where: { email: newEmail },
+    });
     if (emailTaken) {
-      return res.status(409).json({ error: "This email is already in use by another account" });
+      return res
+        .status(409)
+        .json({ error: "This email is already in use by another account" });
     }
 
     await prisma.userProfile.update({
@@ -90,11 +116,16 @@ const updateEmail = async (req, res) => {
     });
 
     await prisma.auditLog.create({
-      data: { userId, action: "EMAIL_CHANGE", changes: { oldEmail: user.email, newEmail } },
+      data: {
+        userId,
+        action: "EMAIL_CHANGE",
+        changes: { oldEmail: user.email, newEmail },
+      },
     });
 
     res.status(200).json({
-      message: "Email updated successfully. Please verify your new email address.",
+      message:
+        "Email updated successfully. Please verify your new email address.",
     });
   } catch (error) {
     console.error("Error updating email:", error);
@@ -116,7 +147,9 @@ const updatePhone = async (req, res) => {
     });
 
     res.status(200).json({
-      message: phoneNumber ? "Phone number updated successfully" : "Phone number removed",
+      message: phoneNumber
+        ? "Phone number updated successfully"
+        : "Phone number removed",
     });
   } catch (error) {
     console.error("Error updating phone:", error);
@@ -136,11 +169,15 @@ const changePassword = async (req, res) => {
 
     if (!user || !user.password) {
       return res.status(400).json({
-        error: "Password cannot be set for accounts linked via Google. Use Google account settings.",
+        error:
+          "Password cannot be set for accounts linked via Google. Use Google account settings.",
       });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordCorrect = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
     if (!isPasswordCorrect) {
       return res.status(401).json({ error: "Current password is incorrect" });
     }
@@ -148,7 +185,11 @@ const changePassword = async (req, res) => {
     // Prevent reusing the same password
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      return res.status(400).json({ error: "New password must be different from your current password" });
+      return res
+        .status(400)
+        .json({
+          error: "New password must be different from your current password",
+        });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -172,6 +213,66 @@ const changePassword = async (req, res) => {
 /**
  * Update profile picture URL.
  */
+/**
+ * Upload a profile picture to Supabase Storage and save the public URL.
+ * Accepts: multipart/form-data with a single file field named 'avatar'.
+ * Max size: 2MB. Allowed types: JPEG, PNG, WebP, GIF.
+ */
+const uploadAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({
+          error: "No file uploaded. Include a file in the 'avatar' field.",
+        });
+    }
+
+    if (!supabase) {
+      return res
+        .status(500)
+        .json({ error: "Storage service is not configured." });
+    }
+
+    const userId = req.user.id;
+    const ext = path.extname(req.file.originalname).toLowerCase() || ".jpg";
+
+    const storagePath = `${userId}/avatar${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(AVATAR_BUCKET)
+      .upload(storagePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error("Supabase upload error:", uploadError);
+      return res
+        .status(500)
+        .json({ error: "Failed to upload image. Please try again." });
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(AVATAR_BUCKET)
+      .getPublicUrl(storagePath);
+
+    const avatarUrl = publicUrlData.publicUrl;
+
+    await prisma.userProfile.update({
+      where: { id: userId },
+      data: { avatarUrl },
+    });
+
+    res
+      .status(200)
+      .json({ message: "Profile picture updated successfully.", avatarUrl });
+  } catch (error) {
+    console.error("Error uploading avatar:", error);
+    res.status(500).json({ error: "Failed to upload profile picture." });
+  }
+};
+
 const updateAvatar = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -500,6 +601,7 @@ module.exports = {
   updatePhone,
   changePassword,
   updateAvatar,
+  uploadAvatar,
   getProfile,
   addEndorsement,
   getPortfolio,

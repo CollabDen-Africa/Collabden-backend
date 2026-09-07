@@ -1,8 +1,7 @@
 const adminSubscriptionsService = require("../services/adminSubscriptions.service");
 
 /**
- * Task 1: Controller to list subscription records with search, filtering, summary counts, and pagination.
- * FR: FRA83, FRA84, FRA85 | NFR: NFRA52, NFRA57
+ *Controller to list subscription records with search, filtering, summary counts, and pagination.
  */
 const getSubscriptionsController = async (req, res) => {
   try {
@@ -18,8 +17,7 @@ const getSubscriptionsController = async (req, res) => {
 };
 
 /**
- * Task 2: Controller to retrieve detailed user subscription record.
- * FR: FRA86 | NFR: NFRA53, NFRA54, NFRA55
+ * Controller to retrieve detailed user subscription record.
  */
 const getSubscriptionDetailsController = async (req, res) => {
   try {
@@ -39,8 +37,7 @@ const getSubscriptionDetailsController = async (req, res) => {
 };
 
 /**
- * Task 2: Controller to retrieve user billing history.
- * FR: FRA88 | NFR: NFRA53, NFRA54, NFRA55
+ * Controller to retrieve user billing history.
  */
 const getUserBillingHistoryController = async (req, res) => {
   try {
@@ -57,8 +54,7 @@ const getUserBillingHistoryController = async (req, res) => {
 };
 
 /**
- * Task 2: Controller to retrieve subscription activity history (upgrades, downgrades, cancellations, renewals).
- * FR: FRA87
+ * Controller to retrieve subscription activity history (upgrades, downgrades, cancellations, renewals).
  */
 const getSubscriptionActivityController = async (req, res) => {
   try {
@@ -75,8 +71,7 @@ const getSubscriptionActivityController = async (req, res) => {
 };
 
 /**
- * Task 2 & Task 3: Controller to retrieve failed subscription payments and payment retry attempts.
- * FR: FRA90 | NFR: NFRA53
+ * Controller to retrieve failed subscription payments and payment retry attempts.
  */
 const getFailedSubscriptionPaymentsController = async (req, res) => {
   try {
@@ -109,8 +104,7 @@ const getSubscriptionIssuesController = async (req, res) => {
 };
 
 /**
- * Task 3: Controller to retrieve a single subscription issue by ID.
- * FR: FRA89
+ *Controller to retrieve a single subscription issue by ID.
  */
 const getSubscriptionIssueDetailsController = async (req, res) => {
   try {
@@ -150,7 +144,6 @@ const createSubscriptionIssueController = async (req, res) => {
 
 /**
  * Task 3: Controller to add an internal admin note to a subscription issue.
- * FR: FRA89
  */
 const addSubscriptionIssueNoteController = async (req, res) => {
   try {
@@ -176,8 +169,7 @@ const addSubscriptionIssueNoteController = async (req, res) => {
 };
 
 /**
- * Task 3: Controller to update subscription issue status and notify user.
- * FR: FRA89, FRA90
+ * Controller to update subscription issue status and notify user.
  */
 const updateSubscriptionIssueStatusController = async (req, res) => {
   try {
@@ -219,8 +211,7 @@ const getSubscriptionPlansController = async (req, res) => {
 };
 
 /**
- * Task 4: Controller to retrieve single subscription plan details.
- * FR: FRA91 | NFR: NFRA53
+ * Controller to retrieve single subscription plan details.
  */
 const getSubscriptionPlanByIdController = async (req, res) => {
   try {

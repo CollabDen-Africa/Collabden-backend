@@ -777,6 +777,7 @@ const moderateProjectPosting = async (adminId, projectId, payload, ipAddress = n
   }
 
   let updateData = {};
+  let metadataAction = null;
   switch (action) {
     case "RESTRICT":
       updateData = { openToCollaborators: false };
@@ -787,8 +788,28 @@ const moderateProjectPosting = async (adminId, projectId, payload, ipAddress = n
     case "RESTORE":
       updateData = { isDeleted: false, openToCollaborators: true };
       break;
+    case "APPROVE":
+      metadataAction = "APPROVED";
+      break;
+    case "REJECT":
+      metadataAction = "REJECTED";
+      break;
     default:
       throw new Error("Invalid moderation action for project posting");
+  }
+
+  if (metadataAction) {
+    const currentProject = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { metadata: true },
+    });
+    const existingMeta =
+      currentProject?.metadata && typeof currentProject.metadata === "object"
+        ? currentProject.metadata
+        : {};
+    updateData = {
+      metadata: { ...existingMeta, listingApprovalStatus: metadataAction },
+    };
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -873,8 +894,7 @@ const moderateProjectPosting = async (adminId, projectId, payload, ipAddress = n
 };
 
 /**
- * View marketplace audit history (chronological, immutable).
- * FR: FRA34, FRA35 | NFR: NFRA22
+ * View marketplace audit history
  */
 const getMarketplaceAuditHistory = async (query = {}) => {
   const { page = 1, limit = 10, search, targetType = "all" } = query;

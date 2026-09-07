@@ -12,6 +12,7 @@ const {
   projectEndorsementSchema,
 } = require("../../../schemas/profile.schema");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
+const { avatarUpload } = require("../../../middleware/avatarUpload.middleware");
 const router = Router();
 
 /**
@@ -120,9 +121,60 @@ router.patch("/password", authMiddleware, validateRequest(changePasswordSchema),
 
 /**
  * @swagger
+ * /api/v1/user/profile/avatar/upload:
+ *   post:
+ *     summary: Upload a profile picture directly (multipart/form-data)
+ *     description: Uploads the file to Supabase Storage and saves the public URL to the user's profile. Max 2MB. Allowed types JPEG, PNG, WebP, GIF.
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [avatar]
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Avatar uploaded and saved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 avatarUrl:
+ *                   type: string
+ *       400:
+ *         description: No file provided or invalid file type/size
+ *       500:
+ *         description: Storage or server error
+ */
+router.post(
+  "/avatar/upload",
+  authMiddleware,
+  avatarUpload.single("avatar"),
+  (err, req, res, next) => {
+    // Handle multer errors (file too large, wrong type) inline
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  },
+  profileController.uploadAvatar
+);
+
+/**
+ * @swagger
  * /api/v1/user/profile/avatar:
  *   patch:
- *     summary: Update profile picture URL
+ *     summary: Update profile picture URL (manual URL, kept for backward compatibility)
  *     tags: [Profile]
  *     security:
  *       - bearerAuth: []
