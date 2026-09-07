@@ -2,7 +2,6 @@ const supportTicketsService = require("../services/adminSupportTickets.service")
 
 /**
  * Controller to list all support tickets with search, filtering, sorting, and pagination.
- * FR: FRA94, FRA95, FRA96
  */
 const getSupportTicketsController = async (req, res) => {
   try {
@@ -19,7 +18,6 @@ const getSupportTicketsController = async (req, res) => {
 
 /**
  * Controller to retrieve a single support ticket by ID.
- * FR: FRA94
  */
 const getSupportTicketByIdController = async (req, res) => {
   try {
@@ -40,7 +38,6 @@ const getSupportTicketByIdController = async (req, res) => {
 
 /**
  * Controller to retrieve summary counts for the support tickets overview.
- * FR: FRA94
  */
 const getSupportTicketsSummaryController = async (req, res) => {
   try {

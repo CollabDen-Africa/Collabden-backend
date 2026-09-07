@@ -9,8 +9,8 @@ const moderateMarketplaceProfileSchema = z.object({
 });
 
 const moderateMarketplaceProjectSchema = z.object({
-  action: z.enum(["RESTRICT", "REMOVE", "RESTORE"], {
-    errorMap: () => ({ message: "Action must be RESTRICT, REMOVE, or RESTORE" }),
+  action: z.enum(["RESTRICT", "REMOVE", "RESTORE", "APPROVE", "REJECT"], {
+    errorMap: () => ({ message: "Action must be RESTRICT, REMOVE, RESTORE, APPROVE, or REJECT" }),
   }),
   reason: z.string().min(1, "Reason is required"),
   notifyOwner: z.boolean().optional().default(true),

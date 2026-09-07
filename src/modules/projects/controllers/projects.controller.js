@@ -15,7 +15,7 @@ const { PROJECT_VISIBILITY } = require("../../../utils/constants");
 
 const createProject = async (req, res) => {
   try {
-    const { name, description, genre, startDate, visibility, collaboratorIds, openToCollaborators, requiredRoles, requiredSkills } = req.body;
+    const { name, description, genre, startDate, endDate, visibility, collaboratorIds, openToCollaborators, requiredRoles, requiredSkills, budget, pricingType } = req.body;
     const userId = req.user.id;
 
     if (!name || !genre || !startDate) {
@@ -32,11 +32,14 @@ const createProject = async (req, res) => {
       description,
       genre,
       startDate,
+      endDate,
       visibility,
       collaboratorIds,
       openToCollaborators,
       requiredRoles,
       requiredSkills,
+      budget,
+      pricingType,
     });
 
     res.status(201).json({

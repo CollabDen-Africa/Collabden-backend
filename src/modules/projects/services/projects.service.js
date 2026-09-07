@@ -7,6 +7,11 @@ const {
   COLLABORATOR_ROLE,
 } = require("../../../utils/constants");
 const { TIER_LIMITS } = require("../../../config/constants");
+const {
+  getPlatformGeneralSettings,
+  getPlatformMarketplaceSettings,
+  getPlatformUserSettings,
+} = require("../../../services/platformSettings.service");
 
 const checkConnection = async (userId, targetId) => {
   const connection = await prisma.userConnection.findFirst({
@@ -26,11 +31,14 @@ const createProjectService = async ({
   description,
   genre,
   startDate,
+  endDate,
   visibility,
   collaboratorIds = [],
   openToCollaborators = false,
   requiredRoles = [],
   requiredSkills = [],
+  budget,
+  pricingType,
 }) => {
   // Fetch user profile for tier check
   const user = await prisma.userProfile.findUnique({
@@ -45,18 +53,112 @@ const createProjectService = async ({
   if (!user) throw new Error("User not found");
 
   if (!user.identityVerified || !user.legalName) {
-    throw new Error("You must complete your identity verification (via government ID/NIN) and set your legal name before creating a project.");
+    throw new Error(
+      "You must complete your identity verification (via government ID/NIN) and set your legal name before creating a project."
+    );
   }
 
   const limits = TIER_LIMITS[user.tier];
 
+  if (openToCollaborators) {
+    const [generalSettings, marketplaceSettings] = await Promise.all([
+      getPlatformGeneralSettings(),
+      getPlatformMarketplaceSettings(),
+    ]);
 
+    if (!generalSettings.enableMarketplace) {
+      throw new Error(
+        "Marketplace is currently disabled. Projects cannot be opened for collaboration."
+      );
+    }
+
+    // Max active listings limit
+    const activeListingsCount = await prisma.project.count({
+      where: {
+        ownerId: userId,
+        openToCollaborators: true,
+        isDeleted: false,
+        status: "ACTIVE",
+      },
+    });
+    if (activeListingsCount >= marketplaceSettings.maxActiveListingsPerUser) {
+      throw new Error(
+        `Maximum active marketplace listings limit reached (${marketplaceSettings.maxActiveListingsPerUser}).`
+      );
+    }
+
+    // Budget rules
+    if (marketplaceSettings.requireProjectBudget) {
+      if (!budget || Number(budget) <= 0) {
+        throw new Error(
+          "A project budget is required for marketplace listings."
+        );
+      }
+    }
+    if (marketplaceSettings.minimumProjectBudget > 0 && budget !== undefined) {
+      if (Number(budget) < marketplaceSettings.minimumProjectBudget) {
+        throw new Error(
+          `Project budget must be at least ${marketplaceSettings.minimumProjectBudget}.`
+        );
+      }
+    }
+
+    // Deadline rule
+    if (marketplaceSettings.requireProjectDeadline) {
+      if (!endDate) {
+        throw new Error(
+          "A project deadline (end date) is required for marketplace listings."
+        );
+      }
+      if (new Date(endDate) <= new Date(startDate)) {
+        throw new Error("Project end date must be after the start date.");
+      }
+    }
+
+    // Pricing model rules
+    if (
+      pricingType === "fixed" &&
+      !marketplaceSettings.allowFixedPriceProjects
+    ) {
+      throw new Error(
+        "Fixed-price projects are currently not allowed on the marketplace."
+      );
+    }
+    if (pricingType === "hourly" && !marketplaceSettings.allowHourlyProjects) {
+      throw new Error(
+        "Hourly projects are currently not allowed on the marketplace."
+      );
+    }
+
+    // Posting cooldown
+    if (marketplaceSettings.projectPostingCooldownHours > 0) {
+      const lastListing = await prisma.project.findFirst({
+        where: { ownerId: userId, openToCollaborators: true, isDeleted: false },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      });
+      if (lastListing) {
+        const hoursSinceLast =
+          (Date.now() - new Date(lastListing.createdAt).getTime()) /
+          (1000 * 60 * 60);
+        const hoursRemaining =
+          marketplaceSettings.projectPostingCooldownHours - hoursSinceLast;
+        if (hoursRemaining > 0) {
+          throw new Error(
+            `You must wait ${Math.ceil(hoursRemaining)} more hour(s) before posting another marketplace listing.`
+          );
+        }
+      }
+    }
+  }
 
   // Check collaborator invitations
   if (collaboratorIds.length > 0) {
     // 1. Check collaborator limit
     if (collaboratorIds.length > limits.MAX_COLLABORATORS) {
-      throw new Error(`Collaborator limit reached for ${user.tier} tier. Max ${limits.MAX_COLLABORATORS} collaborators allowed.`);
+      throw new Error(
+        `Collaborator limit reached for ${user.tier} tier. Max ${limits.MAX_COLLABORATORS} collaborators allowed.`
+      );
     }
 
     // 2. Check connections
@@ -64,15 +166,23 @@ const createProjectService = async ({
     for (const collaboratorId of collaboratorIds) {
       const isConnected = await checkConnection(userId, collaboratorId);
       if (!isConnected) {
-        throw new Error(`You can only invite collaborators you are connected with. Please send a connection request to user ${collaboratorId} first.`);
+        throw new Error(
+          `You can only invite collaborators you are connected with. Please send a connection request to user ${collaboratorId} first.`
+        );
       }
 
       const colProfile = await prisma.userProfile.findUnique({
         where: { id: collaboratorId },
       });
 
-      if (!colProfile || !colProfile.identityVerified || !colProfile.legalName) {
-        throw new Error(`Collaborator ${collaboratorId} must complete their identity verification (via government ID/NIN) and set their legal name before they can collaborate on projects.`);
+      if (
+        !colProfile ||
+        !colProfile.identityVerified ||
+        !colProfile.legalName
+      ) {
+        throw new Error(
+          `Collaborator ${collaboratorId} must complete their identity verification (via government ID/NIN) and set their legal name before they can collaborate on projects.`
+        );
       }
     }
   }
@@ -109,6 +219,12 @@ const createProjectService = async ({
       creatorId: userId,
       initialCollaboratorCount: collaboratorIds.length,
       creationPlatform: "web-dashboard",
+      listingApprovalStatus: openToCollaborators
+        ? await (async () => {
+            const ms = await getPlatformMarketplaceSettings();
+            return ms.listingApprovalRequired ? "PENDING" : "APPROVED";
+          })()
+        : null,
     },
   };
 
@@ -134,10 +250,12 @@ const getProjectListService = async (userId, filters = {}) => {
     status,
     search,
     genre,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
+    sortBy = "createdAt",
+    sortOrder = "desc",
   } = filters;
-  const skip = (Math.max(1, parseInt(page) || 1) - 1) * Math.min(100, Math.max(1, parseInt(limit) || 10));
+  const skip =
+    (Math.max(1, parseInt(page) || 1) - 1) *
+    Math.min(100, Math.max(1, parseInt(limit) || 10));
   const take = Math.min(100, Math.max(1, parseInt(limit) || 10));
 
   const where = {
@@ -193,16 +311,18 @@ const getProjectListService = async (userId, filters = {}) => {
   if (search) {
     where.AND.push({
       OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
       ],
     });
   }
 
   // Define allowed sorting fields to prevent injection or invalid fields
-  const allowedSortFields = ['createdAt', 'updatedAt', 'name', 'startDate'];
-  const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-  const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) ? sortOrder.toLowerCase() : 'desc';
+  const allowedSortFields = ["createdAt", "updatedAt", "name", "startDate"];
+  const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+  const validSortOrder = ["asc", "desc"].includes(sortOrder.toLowerCase())
+    ? sortOrder.toLowerCase()
+    : "desc";
 
   // Fetch total count for pagination metadata
   const total = await prisma.project.count({ where });
@@ -287,7 +407,11 @@ const getProjectDetailsService = async (projectId, userId) => {
   return project;
 };
 
-const inviteCollaboratorService = async (projectId, collaboratorId, inviterId) => {
+const inviteCollaboratorService = async (
+  projectId,
+  collaboratorId,
+  inviterId
+) => {
   // 1. Fetch project to check permissions and limits
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -320,21 +444,32 @@ const inviteCollaboratorService = async (projectId, collaboratorId, inviterId) =
   }
 
   if (!userToInvite.identityVerified || !userToInvite.legalName) {
-    throw new Error("Collaborators must complete their identity verification (via government ID/NIN) and set their legal name before being added to a project.");
+    throw new Error(
+      "Collaborators must complete their identity verification (via government ID/NIN) and set their legal name before being added to a project."
+    );
   }
 
   // 4. Connection Check
   const isConnected = await checkConnection(inviterId, collaboratorId);
   if (!isConnected) {
-    throw new Error("You can only invite collaborators you are connected with.");
+    throw new Error(
+      "You can only invite collaborators you are connected with."
+    );
   }
 
   // 5. Tier/Limit Check
   const limits = TIER_LIMITS[project.owner.tier];
-  const activeCollaborators = project.collaborators.filter(c => c.isActive && c.role !== COLLABORATOR_ROLE.OWNER);
+  const activeCollaborators = project.collaborators.filter(
+    (c) => c.isActive && c.role !== COLLABORATOR_ROLE.OWNER
+  );
 
-  if (limits.MAX_COLLABORATORS !== -1 && activeCollaborators.length >= limits.MAX_COLLABORATORS) {
-    throw new Error(`Collaborator limit reached for ${project.owner.tier} tier. Max ${limits.MAX_COLLABORATORS} collaborators allowed.`);
+  if (
+    limits.MAX_COLLABORATORS !== -1 &&
+    activeCollaborators.length >= limits.MAX_COLLABORATORS
+  ) {
+    throw new Error(
+      `Collaborator limit reached for ${project.owner.tier} tier. Max ${limits.MAX_COLLABORATORS} collaborators allowed.`
+    );
   }
 
   // 6. Check if already a collaborator (including inactive ones)
@@ -349,7 +484,9 @@ const inviteCollaboratorService = async (projectId, collaboratorId, inviterId) =
 
   if (existingCollaborator) {
     if (existingCollaborator.isActive) {
-      throw new Error("This user is already an active collaborator on this project.");
+      throw new Error(
+        "This user is already an active collaborator on this project."
+      );
     } else {
       // Reactivate soft-deleted collaborator
       const collaborator = await prisma.projectCollaborator.update({
@@ -389,7 +526,7 @@ const inviteCollaboratorService = async (projectId, collaboratorId, inviterId) =
 const updateProjectService = async (projectId, userId, updateData) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { ownerId: true, isDeleted: true },
+    select: { ownerId: true, isDeleted: true, metadata: true },
   });
 
   if (!project || project.isDeleted) {
@@ -400,11 +537,102 @@ const updateProjectService = async (projectId, userId, updateData) => {
     throw new Error("Only the project owner can update project settings.");
   }
 
+  // If being opened to collaborators for the first time (or re-opened), enforce rules
+  if (updateData.openToCollaborators === true) {
+    const [generalSettings, marketplaceSettings] = await Promise.all([
+      getPlatformGeneralSettings(),
+      getPlatformMarketplaceSettings(),
+    ]);
+
+    if (!generalSettings.enableMarketplace) {
+      throw new Error(
+        "Marketplace is currently disabled. Projects cannot be opened for collaboration."
+      );
+    }
+
+    const activeListingsCount = await prisma.project.count({
+      where: {
+        ownerId: userId,
+        openToCollaborators: true,
+        isDeleted: false,
+        status: "ACTIVE",
+        NOT: { id: projectId },
+      },
+    });
+    if (activeListingsCount >= marketplaceSettings.maxActiveListingsPerUser) {
+      throw new Error(
+        `Maximum active marketplace listings limit reached (${marketplaceSettings.maxActiveListingsPerUser}).`
+      );
+    }
+
+    // Budget rules
+    const budget = updateData.budget;
+    if (marketplaceSettings.requireProjectBudget) {
+      if (!budget || Number(budget) <= 0) {
+        throw new Error(
+          "A project budget is required for marketplace listings."
+        );
+      }
+    }
+    if (marketplaceSettings.minimumProjectBudget > 0 && budget !== undefined) {
+      if (Number(budget) < marketplaceSettings.minimumProjectBudget) {
+        throw new Error(
+          `Project budget must be at least ${marketplaceSettings.minimumProjectBudget}.`
+        );
+      }
+    }
+
+    // Deadline rule
+    const endDate = updateData.endDate;
+    const startDate = updateData.startDate || project.startDate;
+    if (marketplaceSettings.requireProjectDeadline) {
+      if (!endDate) {
+        throw new Error(
+          "A project deadline (end date) is required for marketplace listings."
+        );
+      }
+      if (new Date(endDate) <= new Date(startDate)) {
+        throw new Error("Project end date must be after the start date.");
+      }
+    }
+
+    // Pricing model rules
+    const pricingType = updateData.pricingType;
+    if (
+      pricingType === "fixed" &&
+      !marketplaceSettings.allowFixedPriceProjects
+    ) {
+      throw new Error(
+        "Fixed-price projects are currently not allowed on the marketplace."
+      );
+    }
+    if (pricingType === "hourly" && !marketplaceSettings.allowHourlyProjects) {
+      throw new Error(
+        "Hourly projects are currently not allowed on the marketplace."
+      );
+    }
+
+    // Update listing approval status on the metadata
+    const existingMeta =
+      project.metadata && typeof project.metadata === "object"
+        ? project.metadata
+        : {};
+    updateData.metadata = {
+      ...existingMeta,
+      ...(updateData.metadata || {}),
+      listingApprovalStatus: marketplaceSettings.listingApprovalRequired
+        ? "PENDING"
+        : "APPROVED",
+    };
+  }
+
   const updatedProject = await prisma.project.update({
     where: { id: projectId },
     data: {
       ...updateData,
-      startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
+      startDate: updateData.startDate
+        ? new Date(updateData.startDate)
+        : undefined,
     },
   });
 
@@ -446,7 +674,11 @@ const deleteProjectService = async (projectId, userId) => {
   return { message: `Project "${project.name}" has been deleted.` };
 };
 
-const removeCollaboratorService = async (projectId, targetUserId, requesterId) => {
+const removeCollaboratorService = async (
+  projectId,
+  targetUserId,
+  requesterId
+) => {
   // 1. Fetch project to check ownership
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -538,19 +770,55 @@ const getProjectMetadataService = async (projectId) => {
 const getMarketplaceProjectsService = async (userId, filters = {}) => {
   const {
     page = 1,
-    limit = 10,
     genre,
     role,
     requirements,
+    skills,
     search,
+    location,
     startDate,
     endDate,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
+    sortBy = "createdAt",
+    sortOrder = "desc",
   } = filters;
 
-  const skip = (Math.max(1, parseInt(page) || 1) - 1) * Math.min(100, Math.max(1, parseInt(limit) || 10));
-  const take = Math.min(100, Math.max(1, parseInt(limit) || 10));
+  // ── Enforce platform-level marketplace settings ────────────────────────────
+  const [generalSettings, marketplaceSettings] = await Promise.all([
+    getPlatformGeneralSettings(),
+    getPlatformMarketplaceSettings(),
+  ]);
+
+  if (!generalSettings.enableMarketplace) {
+    throw new Error("Marketplace is currently disabled by administrator.");
+  }
+
+  if (search && !marketplaceSettings.searchEnabled) {
+    throw new Error("Search is currently disabled on the marketplace.");
+  }
+
+  const skillsQuery = requirements || skills;
+  if (skillsQuery && !marketplaceSettings.enableSkillBasedSearch) {
+    throw new Error(
+      "Skill-based search is currently disabled by administrator."
+    );
+  }
+
+  if (location && !marketplaceSettings.enableLocationBasedSearch) {
+    throw new Error(
+      "Location-based search is currently disabled by administrator."
+    );
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const limit =
+    filters.limit !== undefined
+      ? filters.limit
+      : marketplaceSettings.searchResultsPerPage || 20;
+
+  const skip =
+    (Math.max(1, parseInt(page) || 1) - 1) *
+    Math.min(100, Math.max(1, parseInt(limit) || 20));
+  const take = Math.min(100, Math.max(1, parseInt(limit) || 20));
 
   const where = {
     isDeleted: false,
@@ -559,23 +827,35 @@ const getMarketplaceProjectsService = async (userId, filters = {}) => {
     AND: [],
   };
 
+  // Exclude pending/rejected listings when listing approval is required
+  if (marketplaceSettings.listingApprovalRequired) {
+    where.AND.push({
+      NOT: {
+        OR: [
+          { metadata: { path: ["listingApprovalStatus"], equals: "PENDING" } },
+          { metadata: { path: ["listingApprovalStatus"], equals: "REJECTED" } },
+        ],
+      },
+    });
+  }
+
   if (genre) {
-    where.genre = { contains: genre, mode: 'insensitive' };
+    where.genre = { contains: genre, mode: "insensitive" };
   }
 
   if (role) {
     where.requiredRoles = { has: role };
   }
 
-  if (requirements) {
-    where.requiredSkills = { has: requirements };
+  if (skillsQuery) {
+    where.requiredSkills = { has: skillsQuery };
   }
 
   if (search) {
     where.AND.push({
       OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
       ],
     });
   }
@@ -588,9 +868,11 @@ const getMarketplaceProjectsService = async (userId, filters = {}) => {
     where.endDate = { lte: new Date(endDate) };
   }
 
-  const allowedSortFields = ['createdAt', 'updatedAt', 'name', 'startDate'];
-  const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-  const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) ? sortOrder.toLowerCase() : 'desc';
+  const allowedSortFields = ["createdAt", "updatedAt", "name", "startDate"];
+  const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+  const validSortOrder = ["asc", "desc"].includes(sortOrder.toLowerCase())
+    ? sortOrder.toLowerCase()
+    : "desc";
 
   const total = await prisma.project.count({ where });
 
