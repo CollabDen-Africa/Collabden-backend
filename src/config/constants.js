@@ -129,6 +129,10 @@ const ADMIN_PERMISSIONS = {
   SUPPORT_TICKETS_VIEW: 'support_tickets.view',
   SUPPORT_TICKETS_MANAGE: 'support_tickets.manage',
   SUPPORT_TICKETS_AUDIT: 'support_tickets.audit',
+
+  // Settings
+  SETTINGS_VIEW: 'settings.view',
+  SETTINGS_MANAGE: 'settings.manage',
 };
 
 const ADMIN_MODULES = {
@@ -151,6 +155,82 @@ const ADMIN_MODULES = {
   SUPPORT_REQUESTS: 'support_requests',
 };
 
+const SETTINGS_CATEGORY_MAP = {
+  // User & Account Settings
+  phoneRequiredAtSignUp:     "Account Registration Requirements",
+  dobRequired:               "Account Registration Requirements",
+  stageNameRequired:         "Account Registration Requirements",
+  agreeToTermsRequired:      "Account Registration Requirements",
+  ageVerificationRequired:   "Account Registration Requirements",
+  defaultProfileVisibility:  "Profile Visibility Rules",
+  contactInfoVisibility:     "Profile Visibility Rules",
+  allowUsersToSetPrivate:    "Profile Visibility Rules",
+  showOnlineStatus:          "Profile Visibility Rules",
+  allowSeeEachOthersConnections: "Profile Visibility Rules",
+  verificationToSellOnMarketplace: "User Verification Requirements",
+  verificationToWithdrawEarnings:  "User Verification Requirements",
+  verificationToEnterEscrow:       "User Verification Requirements",
+  showVerifiedBadge:               "User Verification Requirements",
+  maxFailedLoginsBeforeLock:  "Account Restriction Settings",
+  accountLockDuration:        "Account Restriction Settings",
+  allowAdminsToSuspend:       "Account Restriction Settings",
+  autoFlagUnusualActivity:    "Account Restriction Settings",
+
+  // General Platform Settings
+  platformName:          "Platform Branding",
+  supportEmail:          "Platform Branding",
+  primaryColor:          "Platform Branding",
+  logoUrl:               "Platform Branding",
+  defaultLanguage:       "Platform Preferences",
+  defaultCurrency:       "Platform Preferences",
+  timezone:              "Platform Preferences",
+  allowNewRegistrations: "General Features",
+  maintenanceMode:       "General Features",
+  enableMarketplace:     "General Features",
+
+  // Notification Settings
+  emailNotificationsEnabled:  "Email Notifications",
+  emailSenderName:            "Email Notifications",
+  emailSenderAddress:         "Email Notifications",
+  emailFooterText:            "Email Notifications",
+  notifyOnNewRegistration:    "Email Notifications",
+  notifyOnProjectInvite:      "Email Notifications",
+  notifyOnPaymentReceived:    "Email Notifications",
+  notifyOnAccountFlagged:     "Email Notifications",
+  inAppNotificationsEnabled:  "In-App Notifications",
+  notifyOnNewMessage:         "In-App Notifications",
+  notifyOnConnectionRequest:  "In-App Notifications",
+  notifyOnProjectUpdate:      "In-App Notifications",
+  notifyOnMilestoneCompleted: "In-App Notifications",
+  systemAnnouncementsEnabled: "System Announcements",
+  activeAnnouncementTitle:    "System Announcements",
+  activeAnnouncementBody:     "System Announcements",
+  activeAnnouncementType:     "System Announcements",
+
+  // Marketplace Settings
+  listingApprovalRequired:          "Marketplace Availability",
+  allowGuestBrowsing:               "Marketplace Availability",
+  allowBuyerRegistrations:          "Marketplace Availability",
+  allowSellerRegistrations:         "Marketplace Availability",
+  maxActiveListingsPerUser:         "Project Posting Rules",
+  requireProjectBudget:             "Project Posting Rules",
+  requireProjectDeadline:           "Project Posting Rules",
+  allowFixedPriceProjects:          "Project Posting Rules",
+  allowHourlyProjects:              "Project Posting Rules",
+  minimumProjectBudget:             "Project Posting Rules",
+  projectPostingCooldownHours:      "Project Posting Rules",
+  defaultCollaboratorVisibility:    "Collaboration Visibility",
+  showCollaboratorRatings:          "Collaboration Visibility",
+  showCollaboratorReviews:          "Collaboration Visibility",
+  allowCollaboratorsToHideEarnings: "Collaboration Visibility",
+  searchEnabled:                    "Search and Discovery",
+  featuredListingsEnabled:          "Search and Discovery",
+  allowSponsoredListings:           "Search and Discovery",
+  searchResultsPerPage:             "Search and Discovery",
+  enableLocationBasedSearch:        "Search and Discovery",
+  enableSkillBasedSearch:           "Search and Discovery",
+};
+
 module.exports = {
   TIER_LIMITS,
   ALLOWED_MIMETYPES,
@@ -161,4 +241,5 @@ module.exports = {
   SUPPORT_AUDIT_ACTIONS,
   ADMIN_PERMISSIONS,
   ADMIN_MODULES,
+  SETTINGS_CATEGORY_MAP,
 };

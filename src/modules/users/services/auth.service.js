@@ -11,7 +11,65 @@ const { sanitizeUser } = require("../../../utils/sanitizeUser");
 const googleClient = require("../../../config/googleAuth");
 const { ACCOUNT_STATUS, LOGIN_STATUS } = require("../../../config/constants");
 const { verifySync } = require("otplib");
-const userSignUpService = async ({ firstName, lastName, email, password }) => {
+const {
+  getPlatformUserSettings,
+  getPlatformGeneralSettings,
+  getPlatformMarketplaceSettings,
+} = require("../../../services/platformSettings.service");
+
+const userSignUpService = async ({
+  firstName,
+  lastName,
+  email,
+  password,
+  phone,
+  dob,
+  stageName,
+  agreedToTerms,
+  dobVerified,
+  intent,
+}) => {
+  const generalSettings = await getPlatformGeneralSettings();
+  if (!generalSettings.allowNewRegistrations) {
+    throw new Error(
+      "New registrations are currently disabled. Please try again later."
+    );
+  }
+
+  if (intent) {
+    const marketplaceSettings = await getPlatformMarketplaceSettings();
+    const wantsBuyer = intent === "buyer" || intent === "both";
+    const wantsSeller = intent === "seller" || intent === "both";
+    if (wantsBuyer && !marketplaceSettings.allowBuyerRegistrations) {
+      throw new Error(
+        "Buyer registrations are currently disabled. Please try again later."
+      );
+    }
+    if (wantsSeller && !marketplaceSettings.allowSellerRegistrations) {
+      throw new Error(
+        "Seller registrations are currently disabled. Please try again later."
+      );
+    }
+  }
+
+  const settings = await getPlatformUserSettings();
+
+  if (settings.phoneRequiredAtSignUp && !phone) {
+    throw new Error("Phone number is required for registration.");
+  }
+  if (settings.dobRequired && !dob) {
+    throw new Error("Date of birth is required for registration.");
+  }
+  if (settings.stageNameRequired && !stageName) {
+    throw new Error("Stage name is required for registration.");
+  }
+  if (settings.agreeToTermsRequired && !agreedToTerms) {
+    throw new Error("You must agree to the Terms of Service to register.");
+  }
+  if (settings.ageVerificationRequired && !dobVerified) {
+    throw new Error("Age verification is required for registration.");
+  }
+
   if (!firstName || !firstName.trim()) {
     throw new Error("First name cannot be empty");
   }
@@ -20,7 +78,6 @@ const userSignUpService = async ({ firstName, lastName, email, password }) => {
   }
 
   const normalizedEmail = email?.toLowerCase();
-
   const existingUser = await prisma.userProfile.findUnique({
     where: { email: normalizedEmail },
   });
@@ -48,6 +105,10 @@ const userSignUpService = async ({ firstName, lastName, email, password }) => {
       isVerified: false,
       verificationToken,
       verificationTokenExpiry: new Date(Date.now() + 15 * 60 * 1000),
+
+      ...(phone && { phone }),
+      ...(dob && { dob: new Date(dob) }),
+      ...(stageName && { stageName }),
     },
   });
 
@@ -67,6 +128,12 @@ const userLoginService = async ({
   userAgent,
   twoFactorCode,
 }) => {
+  const platformSettings = await getPlatformUserSettings();
+  const maxAttempts = platformSettings.maxFailedLoginsBeforeLock ?? 5;
+
+  const lockDurationMs =
+    parseInt(platformSettings.accountLockDuration ?? "30", 10) * 60 * 1000;
+
   const normalizedEmail = email?.toLowerCase();
   const user = await prisma.userProfile.findUnique({
     where: { email: normalizedEmail },
@@ -86,12 +153,11 @@ const userLoginService = async ({
     );
   }
 
-  // Helper for failed logins
   const handleFailedLogin = async () => {
     const newAttempts = user.failedLoginAttempts + 1;
     let lockoutUntil = null;
-    if (newAttempts >= 5) {
-      lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
+    if (newAttempts >= maxAttempts) {
+      lockoutUntil = new Date(Date.now() + lockDurationMs);
     }
     await prisma.userProfile.update({
       where: { id: user.id },

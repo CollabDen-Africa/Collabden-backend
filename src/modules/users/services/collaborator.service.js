@@ -1,21 +1,57 @@
 const prisma = require("../../../config/prismaClient");
 const { publishEvent } = require("../../../events/publisher");
 const EVENT_TYPES = require("../../../events/eventTypes");
+const {
+  getPlatformGeneralSettings,
+  getPlatformMarketplaceSettings,
+  getPlatformUserSettings,
+} = require("../../../services/platformSettings.service");
 
 /**
  * Retrieve collaborator profiles with optional filtering and searching.
  */
 const listCollaborators = async (filters = {}) => {
   const { name, skills, genres, role, openToCollaborate } = filters;
+
+  const [generalSettings, marketplaceSettings] = await Promise.all([
+    getPlatformGeneralSettings(),
+    getPlatformMarketplaceSettings(),
+  ]);
+
+  if (!generalSettings.enableMarketplace) {
+    throw new Error("Marketplace is currently disabled by administrator.");
+  }
+
+  if ((name || role) && !marketplaceSettings.searchEnabled) {
+    throw new Error("Search is currently disabled on the marketplace.");
+  }
+
+  if (skills && !marketplaceSettings.enableSkillBasedSearch) {
+    throw new Error(
+      "Skill-based search is currently disabled by administrator."
+    );
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const where = {};
 
-  // Default to showing only users who are open to collaborate, unless specified otherwise
-  let openFilter = true;
+  // Default to showing only users who are open to collaborate unless specified otherwise.
+  // Fall back to defaultCollaboratorVisibility when caller doesn't pass a filter.
+  let openFilter;
   if (openToCollaborate !== undefined) {
-    if (openToCollaborate === 'all') {
+    if (openToCollaborate === "all") {
       openFilter = undefined;
     } else {
-      openFilter = openToCollaborate === 'true' || openToCollaborate === true;
+      openFilter = openToCollaborate === "true" || openToCollaborate === true;
+    }
+  } else {
+    // Apply admin-configured default collaborator visibility
+    const defaultVis =
+      marketplaceSettings.defaultCollaboratorVisibility || "all";
+    if (defaultVis === "all") {
+      openFilter = undefined;
+    } else {
+      openFilter = true;
     }
   }
 
@@ -35,17 +71,19 @@ const listCollaborators = async (filters = {}) => {
 
   // Skills filtering (supports comma-separated list or array)
   if (skills) {
-    const skillsList = typeof skills === "string" 
-      ? skills.split(",").map(s => s.trim()) 
-      : skills;
+    const skillsList =
+      typeof skills === "string"
+        ? skills.split(",").map((s) => s.trim())
+        : skills;
     where.skills = { hasSome: skillsList };
   }
 
   // Genres filtering (supports comma-separated list or array)
   if (genres) {
-    const genresList = typeof genres === "string" 
-      ? genres.split(",").map(g => g.trim()) 
-      : genres;
+    const genresList =
+      typeof genres === "string"
+        ? genres.split(",").map((g) => g.trim())
+        : genres;
     where.genres = { hasSome: genresList };
   }
 
@@ -53,13 +91,10 @@ const listCollaborators = async (filters = {}) => {
   if (role) {
     const roleSearch = { experience: { contains: role, mode: "insensitive" } };
     const skillSearch = { skills: { hasSome: [role] } };
-    
+
     if (where.OR) {
       // If name filter OR is already set, we combine them
-      where.AND = [
-        { OR: where.OR },
-        { OR: [roleSearch, skillSearch] }
-      ];
+      where.AND = [{ OR: where.OR }, { OR: [roleSearch, skillSearch] }];
       delete where.OR;
     } else {
       where.OR = [roleSearch, skillSearch];
@@ -129,7 +164,12 @@ const getCollaboratorDetails = async (userId) => {
           collaborators: {
             include: {
               user: {
-                select: { id: true, displayName: true, firstName: true, lastName: true },
+                select: {
+                  id: true,
+                  displayName: true,
+                  firstName: true,
+                  lastName: true,
+                },
               },
             },
           },
@@ -139,7 +179,7 @@ const getCollaboratorDetails = async (userId) => {
     orderBy: { createdAt: "desc" },
   });
 
-  const portfolio = portfolioEntries.map(entry => ({
+  const portfolio = portfolioEntries.map((entry) => ({
     projectId: entry.projectId,
     projectName: entry.project.name,
     role: entry.contributionRole || entry.role || "Collaborator",
@@ -147,7 +187,7 @@ const getCollaboratorDetails = async (userId) => {
     isPinned: entry.isPinned,
     startDate: entry.project.startDate || entry.createdAt,
     endDate: entry.project.endDate || entry.project.updatedAt,
-    collaborators: entry.project.collaborators.map(c => ({
+    collaborators: entry.project.collaborators.map((c) => ({
       userId: c.user.id,
       name: c.user.displayName || `${c.user.firstName} ${c.user.lastName}`,
     })),
@@ -172,7 +212,7 @@ const getCollaboratorDetails = async (userId) => {
   const allProjects = [];
   const projectIds = new Set();
 
-  ownedProjects.forEach(p => {
+  ownedProjects.forEach((p) => {
     projectIds.add(p.id);
     allProjects.push({
       id: p.id,
@@ -183,7 +223,7 @@ const getCollaboratorDetails = async (userId) => {
     });
   });
 
-  collaboratorProjects.forEach(cp => {
+  collaboratorProjects.forEach((cp) => {
     if (!projectIds.has(cp.project.id)) {
       projectIds.add(cp.project.id);
       allProjects.push({
@@ -198,9 +238,14 @@ const getCollaboratorDetails = async (userId) => {
 
   const history = {
     totalProjectsCount: allProjects.length,
-    completedProjectsCount: allProjects.filter(p => p.status === "COMPLETED").length,
-    activeProjectsCount: allProjects.filter(p => p.status === "ACTIVE" || p.status === "IN_PROGRESS").length,
-    projects: allProjects.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)),
+    completedProjectsCount: allProjects.filter((p) => p.status === "COMPLETED")
+      .length,
+    activeProjectsCount: allProjects.filter(
+      (p) => p.status === "ACTIVE" || p.status === "IN_PROGRESS"
+    ).length,
+    projects: allProjects.sort(
+      (a, b) => new Date(b.startDate) - new Date(a.startDate)
+    ),
   };
 
   // 3. Endorsements: Received endorsements
@@ -208,7 +253,13 @@ const getCollaboratorDetails = async (userId) => {
     where: { recipientId: userId, isApproved: true },
     include: {
       endorser: {
-        select: { id: true, displayName: true, firstName: true, lastName: true, avatarUrl: true },
+        select: {
+          id: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          avatarUrl: true,
+        },
       },
       project: {
         select: { id: true, name: true },
@@ -221,17 +272,24 @@ const getCollaboratorDetails = async (userId) => {
     ...profile,
     portfolio,
     history,
-    endorsements: endorsements.map(e => ({
+    endorsements: endorsements.map((e) => ({
       id: e.id,
-      content: e.content,
+      // Redact review text if admin has disabled collaborator reviews
+      content: marketplaceSettings.showCollaboratorReviews ? e.content : null,
       createdAt: e.createdAt,
       endorser: {
         userId: e.endorser.id,
-        name: e.endorser.displayName || `${e.endorser.firstName} ${e.endorser.lastName}`,
+        name:
+          e.endorser.displayName ||
+          `${e.endorser.firstName} ${e.endorser.lastName}`,
         avatarUrl: e.endorser.avatarUrl,
       },
       project: e.project ? { id: e.project.id, name: e.project.name } : null,
     })),
+    // Omit endorsement count (rating indicator) if admin disabled ratings
+    endorsementCount: marketplaceSettings.showCollaboratorRatings
+      ? endorsements.length
+      : null,
   };
 };
 
@@ -239,6 +297,38 @@ const getCollaboratorDetails = async (userId) => {
  * Update availability status for a collaborator.
  */
 const updateAvailabilityStatus = async (userId, openToCollaborate) => {
+  if (openToCollaborate === true) {
+    const [generalSettings, marketplaceSettings, userSettings] =
+      await Promise.all([
+        getPlatformGeneralSettings(),
+        getPlatformMarketplaceSettings(),
+        getPlatformUserSettings(),
+      ]);
+
+    if (!generalSettings.enableMarketplace) {
+      throw new Error("Marketplace is currently disabled by administrator.");
+    }
+
+    if (!marketplaceSettings.allowSellerRegistrations) {
+      throw new Error(
+        "Seller and collaborator listings are currently disabled on the marketplace."
+      );
+    }
+
+    if (userSettings.verificationToSellOnMarketplace) {
+      const user = await prisma.userProfile.findUnique({
+        where: { id: userId },
+        select: { identityVerified: true },
+      });
+      if (!user || !user.identityVerified) {
+        throw new Error(
+          "Identity verification is required before listing yourself as open to collaborate on the marketplace."
+        );
+      }
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const oldProfile = await prisma.userProfile.findUnique({
     where: { id: userId },
     select: { openToCollaborate: true },

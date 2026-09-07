@@ -2,7 +2,6 @@ const verificationService = require("../services/adminVerification.service");
 
 /**
  * Controller to list user verification requests with search, filtering, sorting, and pagination.
- * FR: FRA72, FRA73, FRA74 | NFR: NFRA45, NFRA50
  */
 const getVerificationRequestsController = async (req, res) => {
   try {

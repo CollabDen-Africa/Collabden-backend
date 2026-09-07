@@ -1,0 +1,150 @@
+model PlatformUserSettings {
+  id                    String   @id @default("singleton")
+
+  // Account Registration Requirements
+  phoneRequiredAtSignUp Boolean  @default(false)
+  dobRequired           Boolean  @default(false)
+  stageNameRequired     Boolean  @default(false)
+  agreeToTermsRequired  Boolean  @default(true)
+  ageVerificationRequired Boolean @default(true)
+
+  // Profile Visibility Rules
+  defaultProfileVisibility  String  @default("Public")  // Public | Private | Connections Only
+  contactInfoVisibility     String  @default("Hidden")  // Hidden | Connections Only | Public
+  allowUsersToSetPrivate    Boolean @default(true)
+  showOnlineStatus          Boolean @default(true)
+  allowSeeEachOthersConnections Boolean @default(false)
+
+  // Verification Requirements
+  verificationToSellOnMarketplace Boolean @default(true)
+  verificationToWithdrawEarnings  Boolean @default(true)
+  verificationToEnterEscrow       Boolean @default(true)
+  showVerifiedBadge               Boolean @default(true)
+
+  // Account Restriction Settings
+  maxFailedLoginsBeforeLock Int     @default(5)
+  accountLockDuration       String  @default("30")
+  allowAdminsToSuspend      Boolean @default(true)
+  autoFlagUnusualActivity   Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model SettingsAuditLog {
+  id            String   @id @default(cuid())
+
+  // What changed
+  settingName   String           
+  category      String           
+  previousValue String?          
+  newValue      String?          
+
+  // Who / when
+  adminId       String
+  performedAt   DateTime @default(now())
+  ipAddress     String?
+  userAgent     String?
+
+  // Relation
+  admin         AdminUser @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([settingName])
+  @@index([category])
+  @@index([performedAt])
+}
+
+model PlatformGeneralSettings {
+  id String @id @default("singleton")
+
+  // Platform Name & Branding
+  platformName  String  @default("Collabden")
+  supportEmail  String  @default("support@collabden.com")
+  primaryColor  String  @default("#2563EB")
+  logoUrl       String?
+
+  // Default Platform Preferences
+  defaultLanguage String @default("en")
+  defaultCurrency String @default("NGN")
+  timezone        String @default("UTC")
+
+  // Registration & General Features
+  allowNewRegistrations Boolean @default(true)
+  maintenanceMode       Boolean @default(false)
+  enableMarketplace     Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model PlatformNotificationSettings {
+  id String @id @default("singleton")
+
+  // ── Email Notifications ───────────────────────────────────────────────────
+  emailNotificationsEnabled  Boolean @default(true)
+  emailSenderName            String  @default("Collabden")
+  emailSenderAddress         String  @default("no-reply@collabden.com")
+  emailFooterText            String?
+
+  // Trigger toggles for email events
+  notifyOnNewRegistration    Boolean @default(true)
+  notifyOnProjectInvite      Boolean @default(true)
+  notifyOnPaymentReceived    Boolean @default(true)
+  notifyOnAccountFlagged     Boolean @default(true)
+
+  // ── In-App Notifications ──────────────────────────────────────────────────
+  inAppNotificationsEnabled  Boolean @default(true)
+
+  notifyOnNewMessage         Boolean @default(true)
+  notifyOnConnectionRequest  Boolean @default(true)
+  notifyOnProjectUpdate      Boolean @default(true)
+  notifyOnMilestoneCompleted Boolean @default(true)
+
+  // ── System Announcements ──────────────────────────────────────────────────
+  systemAnnouncementsEnabled   Boolean  @default(true)
+  activeAnnouncementTitle      String?
+  activeAnnouncementBody       String?
+  activeAnnouncementType       String   @default("info")
+  announcementPublishedAt      DateTime?
+  announcementPublishedBy      String?
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model PlatformMarketplaceSettings {
+  id String @id @default("singleton")
+
+  // ── Marketplace Availability ──────────────────────────────────────────────
+  listingApprovalRequired  Boolean @default(false)
+  allowGuestBrowsing       Boolean @default(true)
+  allowBuyerRegistrations  Boolean @default(true)
+  allowSellerRegistrations Boolean @default(true)
+
+  // ── Project Posting Rules ─────────────────────────────────────────────────
+  maxActiveListingsPerUser    Int     @default(10)
+  requireProjectBudget        Boolean @default(false)
+  requireProjectDeadline      Boolean @default(false)
+  allowFixedPriceProjects     Boolean @default(true)
+  allowHourlyProjects         Boolean @default(true)
+  minimumProjectBudget        Int     @default(0)
+  projectPostingCooldownHours Int     @default(0)
+
+  // ── Collaboration Visibility ──────────────────────────────────────────────
+  defaultCollaboratorVisibility    String  @default("all")
+  showCollaboratorRatings          Boolean @default(true)
+  showCollaboratorReviews          Boolean @default(true)
+  allowCollaboratorsToHideEarnings Boolean @default(true)
+
+  // ── Search & Discovery ────────────────────────────────────────────────────
+  searchEnabled             Boolean @default(true)
+  featuredListingsEnabled   Boolean @default(true)
+  allowSponsoredListings    Boolean @default(false)
+  searchResultsPerPage      Int     @default(20)
+  enableLocationBasedSearch Boolean @default(true)
+  enableSkillBasedSearch    Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
