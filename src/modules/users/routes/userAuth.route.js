@@ -12,6 +12,11 @@ const router = Router();
  * /api/v1/user/signup:
  *   post:
  *     summary: Register a new user
+ *     description: |
+ *       Creates an unverified account and sends an email verification code.
+ *       `phone`, `dob`, `stageName`, `agreedToTerms`, and `dobVerified` may be
+ *       required depending on the current platform registration settings. The
+ *       selected `intent` is checked against buyer and seller registration availability.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -33,6 +38,40 @@ const router = Router();
  *                 type: string
  *               password:
  *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 description: Must contain at least one uppercase letter and one number.
+ *               phone:
+ *                 type: string
+ *                 description: Phone number. Required when phone registration is enabled in platform settings.
+ *               dob:
+ *                 type: string
+ *                 format: date
+ *                 description: Date of birth. Required when date-of-birth collection is enabled in platform settings.
+ *               stageName:
+ *                 type: string
+ *                 description: Public or professional name. Required when stage-name collection is enabled in platform settings.
+ *               agreedToTerms:
+ *                 type: boolean
+ *                 description: Must be true when acceptance of the Terms of Service is required in platform settings.
+ *               dobVerified:
+ *                 type: boolean
+ *                 description: Must be true when age verification is required in platform settings.
+ *               intent:
+ *                 type: string
+ *                 enum: [buyer, seller, both]
+ *                 description: Intended marketplace role. Its availability is controlled by platform settings.
+ *             example:
+ *               firstName: Jane
+ *               lastName: Doe
+ *               email: jane@example.com
+ *               password: SecurePass1
+ *               phone: "+2348012345678"
+ *               dob: "1995-06-15"
+ *               stageName: Jane D
+ *               agreedToTerms: true
+ *               dobVerified: true
+ *               intent: both
  *     responses:
  *       201:
  *         description: User created successfully
