@@ -28,8 +28,8 @@ const forgotPasswordSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  resetToken: z.string().min(1, "Reset token is required"),
-  newPassword: z
+  token: z.string().min(1, "Reset token is required"),
+  password: z
     .string()
     .min(8, "Password must be at least 8 characters")
     .regex(/\d/, "Password must include at least one number")

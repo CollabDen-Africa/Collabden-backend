@@ -378,9 +378,9 @@ const forgotPasswordService = async (email, ipAddress, userAgent) => {
   return { message: "Password reset link sent to your email" };
 };
 
-const resetPasswordService = async (resetToken, newPassword, ipAddress, userAgent) => {
+const resetPasswordService = async (token, password, ipAddress, userAgent) => {
   const user = await prisma.userProfile.findUnique({
-    where: { resetToken },
+    where: { resetToken: token },
   });
 
   if (!user) {
@@ -393,7 +393,7 @@ const resetPasswordService = async (resetToken, newPassword, ipAddress, userAgen
   }
 
   // Hash new password
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   // Update password and clear reset token
   await prisma.userProfile.update({
