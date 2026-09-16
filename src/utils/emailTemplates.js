@@ -239,7 +239,7 @@ const getVerificationEmailTemplate = (verificationToken) => {
 
 const getPasswordResetEmailTemplate = (resetToken) => {
   const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL;
-  const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+  const resetLink = `${frontendUrl}/auth/forgot-password?token=${resetToken}`;
 
   const content = `
     <h2 style="color: #667eea;">Reset Your Password</h2>
