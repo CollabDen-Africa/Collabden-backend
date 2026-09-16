@@ -104,10 +104,10 @@ const AuthController = {
   }),
   resetPassword: catchAsync(async (req, res) => {
     try {
-      const { resetToken, newPassword } = req.body;
+      const { token, password } = req.body;
       const result = await resetPasswordService(
-        resetToken, 
-        newPassword,
+        token,
+        password,
         req.ip || req.connection?.remoteAddress,
         req.headers['user-agent']
       );
