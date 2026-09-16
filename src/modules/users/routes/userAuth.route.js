@@ -211,8 +211,8 @@ router.post("/forgot-password", validateRequest(forgotPasswordSchema), authContr
  *           schema:
  *             type: object
  *             required:
- *               - password
- *               - token
+ *               - newPassword
+ *               - resetToken
  *             properties:
  *               password:
  *                 type: string
