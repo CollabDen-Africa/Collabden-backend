@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const {
   getCollaborators,
+  getConnectedCollaborators,
   getCollaboratorById,
   updateAvailability,
   listSkills,
@@ -54,6 +55,8 @@ const router = Router();
  *               type: array
  */
 router.get("/", getCollaborators);
+
+router.get("/connected", authMiddleware, getConnectedCollaborators);
 
 /**
  * @swagger

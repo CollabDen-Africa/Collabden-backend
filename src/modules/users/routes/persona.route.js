@@ -1,5 +1,6 @@
 const express = require('express');
-const { handleWebhook } = require('../controllers/persona.controller');
+const { handleWebhook, createInquiry } = require('../controllers/persona.controller');
+const { authMiddleware } = require('../../../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -9,6 +10,36 @@ const router = express.Router();
  *   name: Persona
  *   description: Endpoints for Persona identity verification integrations
  */
+
+/**
+ * @swagger
+ * /api/v1/user/persona/create-inquiry:
+ *   post:
+ *     summary: Create a Persona identity verification inquiry
+ *     description: Creates a new Persona inquiry for the authenticated user and returns the session token needed to launch the Persona embedded SDK on the frontend.
+ *     tags: [Persona]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Inquiry created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 inquiryId:
+ *                   type: string
+ *                 sessionToken:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error or service misconfiguration
+ *       502:
+ *         description: Upstream Persona API error
+ */
+router.post('/create-inquiry', authMiddleware, createInquiry);
 
 /**
  * @swagger

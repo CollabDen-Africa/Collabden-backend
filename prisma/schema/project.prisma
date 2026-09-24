@@ -13,6 +13,12 @@ enum CollaboratorRole {
   COLLABORATOR
 }
 
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model Project {
   id            String                @id @default(cuid())
   name          String
@@ -54,7 +60,8 @@ model ProjectCollaborator {
   role               CollaboratorRole @default(COLLABORATOR)
   project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user               UserProfile      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  isActive           Boolean          @default(true)
+  isActive           Boolean          @default(false)
+  inviteStatus       InviteStatus     @default(PENDING)
   contributionRole   String?
   completedMusicLink String?
   isPinned           Boolean          @default(false)

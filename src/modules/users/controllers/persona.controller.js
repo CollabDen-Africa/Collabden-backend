@@ -1,6 +1,88 @@
 const crypto = require("crypto");
 const prisma = require("../../../config/prismaClient");
 
+
+const createInquiry = async (req, res) => {
+  const apiKey = process.env.PERSONA_API_KEY;
+  const templateId = process.env.PERSONA_TEMPLATE_ID;
+  const appUrl = process.env.APP_URL;
+  const redirectUri = `${appUrl}/profile?persona=complete`;
+
+  if (!apiKey || !templateId) {
+    console.error("PERSONA_API_KEY or PERSONA_TEMPLATE_ID is not configured");
+    return res
+      .status(500)
+      .json({ error: "Identity verification service is not configured" });
+  }
+
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const personaResponse = await fetch(
+      "https://withpersona.com/api/v1/inquiries",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "Persona-Version": "2023-01-05",
+          "Key-Inflection": "camel",
+        },
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              inquiryTemplateId: templateId,
+              referenceId: userId,
+              redirectUri: redirectUri,
+            },
+          },
+        }),
+      }
+    );
+
+    const personaData = await personaResponse.json();
+
+    if (!personaResponse.ok) {
+      console.error("Persona API error:", JSON.stringify(personaData));
+      return res.status(502).json({
+        error: "Failed to create identity verification session",
+        details:
+          personaData?.errors?.[0]?.details ||
+          personaData?.errors?.[0]?.detail ||
+          personaData?.errors?.[0]?.title ||
+          "Unknown Persona error",
+      });
+    }
+
+    const inquiry = personaData.data;
+    const inquiryId = inquiry?.id;
+    const sessionToken = inquiry?.attributes?.sessionToken;
+
+    if (!inquiryId) {
+      console.error(
+        "Persona response missing inquiryId:",
+        JSON.stringify(personaData)
+      );
+      return res
+        .status(502)
+        .json({
+          error: "Incomplete response from identity verification service",
+        });
+    }
+
+    // Unique Hosted Flow URL using API generated inquiry-id
+    const redirectUrl = `https://withpersona.com/verify?inquiry-id=${inquiryId}`;
+
+    return res.status(201).json({ inquiryId, sessionToken, redirectUrl });
+  } catch (error) {
+    console.error("Error creating Persona inquiry:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 const handleWebhook = async (req, res) => {
   const signatureHeader = req.headers["persona-signature"];
   const secret = process.env.PERSONA_WEBHOOK_SECRET;
@@ -197,5 +279,6 @@ const handleWebhook = async (req, res) => {
 };
 
 module.exports = {
+  createInquiry,
   handleWebhook,
 };

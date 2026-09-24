@@ -3,17 +3,39 @@ const collaboratorService = require("../services/collaborator.service");
 const getCollaborators = async (req, res) => {
   try {
     const { name, skills, genres, role, openToCollaborate } = req.query;
+    const currentUserId = req.user?.id;
     const collaborators = await collaboratorService.listCollaborators({
       name,
       skills,
       genres,
       role,
       openToCollaborate,
+      excludeUserId: currentUserId,
     });
     res.status(200).json(collaborators);
   } catch (error) {
     console.error("Error fetching collaborators:", error);
     res.status(500).json({ error: "Failed to fetch collaborators" });
+  }
+};
+
+const getConnectedCollaborators = async (req, res) => {
+  try {
+    const { name, skills, genres, role, openToCollaborate } = req.query;
+    const currentUserId = req.user.id;
+    const collaborators = await collaboratorService.listCollaborators({
+      name,
+      skills,
+      genres,
+      role,
+      openToCollaborate,
+      excludeUserId: currentUserId,
+      connectedToUserId: currentUserId,
+    });
+    res.status(200).json(collaborators);
+  } catch (error) {
+    console.error("Error fetching connected collaborators:", error);
+    res.status(500).json({ error: "Failed to fetch connected collaborators" });
   }
 };
 
@@ -76,6 +98,7 @@ const listGenres = async (req, res) => {
 
 module.exports = {
   getCollaborators,
+  getConnectedCollaborators,
   getCollaboratorById,
   updateAvailability,
   listSkills,

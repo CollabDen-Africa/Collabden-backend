@@ -137,7 +137,7 @@ router.post('/reset-password', AdminAuthController.resetPassword);
  * /api/v1/admin/auth/me:
  *   get:
  *     summary: Get admin profile
- *     description: Retrieve the authenticated admin's profile.
+ *     description: Retrieve the authenticated admin's profile. Requires an admin bearer token; normal-user tokens are rejected with 403 and never receive admin privileges.
  *     tags: [Admin Auth]
  *     security:
  *       - bearerAuth: []
@@ -145,7 +145,9 @@ router.post('/reset-password', AdminAuthController.resetPassword);
  *       200:
  *         description: Admin profile fetched successfully
  *       401:
- *         description: Unauthorized
+ *         description: Missing, expired, invalid, or revoked admin token
+ *       403:
+ *         description: Valid token is a normal-user token; it is never upgraded to admin access
  */
 router.get('/me', adminMiddleware(), AdminAuthController.me);
 

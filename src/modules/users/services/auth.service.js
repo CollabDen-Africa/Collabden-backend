@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const prisma = require("../../../config/prismaClient");
 const { sendEmail } = require("../../../utils/sendEmail");
-const { generateToken } = require("../../../utils/generateToken");
+const { generateUserToken } = require("../../../utils/generateToken");
 const {
   getVerificationEmailTemplate,
   getPasswordResetEmailTemplate,
@@ -248,7 +248,7 @@ const userLoginService = async ({
     },
   });
 
-  const token = generateToken({
+  const token = generateUserToken({
     id: user.id,
     email: user.email,
     isVerified: user.isVerified,
@@ -276,7 +276,10 @@ const verifyEmailService = async (email, verificationToken) => {
     throw new Error("Invalid verification token");
   }
 
-  if (user.verificationTokenExpiry && new Date() > user.verificationTokenExpiry) {
+  if (
+    user.verificationTokenExpiry &&
+    new Date() > user.verificationTokenExpiry
+  ) {
     throw new Error("Verification token has expired");
   }
 
@@ -426,7 +429,12 @@ const googleAuthCallbackService = async (code) => {
   });
   const payload = ticket.getPayload();
 
-  const { sub: googleId, email, given_name: firstName, family_name: lastName } = payload;
+  const {
+    sub: googleId,
+    email,
+    given_name: firstName,
+    family_name: lastName,
+  } = payload;
   const normalizedEmail = email?.toLowerCase();
 
   let user = await prisma.userProfile.findUnique({
@@ -453,11 +461,17 @@ const googleAuthCallbackService = async (code) => {
     });
   }
 
-  const token = generateToken({
+  user = await prisma.userProfile.update({
+    where: { id: user.id },
+    data: { lastActiveAt: new Date() },
+  });
+
+  const token = generateUserToken({
     id: user.id,
     email: user.email,
     isVerified: user.isVerified,
     onboardingCompleted: user.onboardingCompleted,
+    tokenVersion: user.tokenVersion,
   });
 
   return {

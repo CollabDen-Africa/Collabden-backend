@@ -11,22 +11,30 @@ const {
  * Retrieve collaborator profiles with optional filtering and searching.
  */
 const listCollaborators = async (filters = {}) => {
-  const { name, skills, genres, role, openToCollaborate } = filters;
+  const {
+    name,
+    skills,
+    genres,
+    role,
+    openToCollaborate,
+    excludeUserId,
+    connectedToUserId,
+  } = filters;
 
   const [generalSettings, marketplaceSettings] = await Promise.all([
     getPlatformGeneralSettings(),
     getPlatformMarketplaceSettings(),
   ]);
 
-  if (!generalSettings.enableMarketplace) {
+  if (!connectedToUserId && !generalSettings.enableMarketplace) {
     throw new Error("Marketplace is currently disabled by administrator.");
   }
 
-  if ((name || role) && !marketplaceSettings.searchEnabled) {
+  if (!connectedToUserId && (name || role) && !marketplaceSettings.searchEnabled) {
     throw new Error("Search is currently disabled on the marketplace.");
   }
 
-  if (skills && !marketplaceSettings.enableSkillBasedSearch) {
+  if (!connectedToUserId && skills && !marketplaceSettings.enableSkillBasedSearch) {
     throw new Error(
       "Skill-based search is currently disabled by administrator."
     );
@@ -34,6 +42,28 @@ const listCollaborators = async (filters = {}) => {
   // ───────────────────────────────────────────────────────────────────────────
 
   const where = {};
+  if (connectedToUserId) {
+    const connections = await prisma.userConnection.findMany({
+      where: {
+        status: "ACCEPTED",
+        OR: [
+          { senderId: connectedToUserId },
+          { receiverId: connectedToUserId },
+        ],
+      },
+      select: { senderId: true, receiverId: true },
+    });
+
+    const connectedUserIds = connections.map((connection) =>
+      connection.senderId === connectedToUserId
+        ? connection.receiverId
+        : connection.senderId,
+    );
+
+    where.id = { in: connectedUserIds };
+  } else if (excludeUserId) {
+    where.id = { not: excludeUserId };
+  }
 
   // Default to showing only users who are open to collaborate unless specified otherwise.
   // Fall back to defaultCollaboratorVisibility when caller doesn't pass a filter.
@@ -44,7 +74,7 @@ const listCollaborators = async (filters = {}) => {
     } else {
       openFilter = openToCollaborate === "true" || openToCollaborate === true;
     }
-  } else {
+  } else if (!connectedToUserId) {
     // Apply admin-configured default collaborator visibility
     const defaultVis =
       marketplaceSettings.defaultCollaboratorVisibility || "all";
