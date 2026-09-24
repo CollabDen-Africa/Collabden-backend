@@ -1,9 +1,16 @@
 const { Router } = require("express");
+const multer = require("multer");
 const {
   createProject,
+  uploadProjectFile,
+  sendProjectMessage,
+  createProjectTask,
+  updateProjectTaskStatus,
   getProjects,
   getProjectDetails,
   inviteCollaborator,
+  respondToInvite,
+  getMyInvites,
   updateProject,
   deleteProject,
   removeCollaborator,
@@ -24,6 +31,10 @@ const {
 } = require("../controllers/applications.controller");
 
 const router = Router();
+const projectFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
 
 router.use(authMiddleware);
 
@@ -65,6 +76,171 @@ router.use(authMiddleware);
  *         description: Missing required fields
  */
 router.post("/", createProject);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files:
+ *   post:
+ *     summary: Upload a project workspace file
+ *     description: Uploads one file to a project. The authenticated user must be a project collaborator with upload access.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: File uploaded successfully
+ *       400:
+ *         description: No file supplied or invalid upload
+ *       401:
+ *         description: Missing or invalid user bearer token
+ *       403:
+ *         description: User cannot upload files to this project
+ */
+router.post("/:id/files", projectFileUpload.single("file"), uploadProjectFile);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/messages:
+ *   post:
+ *     summary: Send a project workspace message
+ *     description: Sends a message to the project workspace as the authenticated collaborator.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [content]
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 maxLength: 5000
+ *     responses:
+ *       201:
+ *         description: Message sent successfully
+ *       400:
+ *         description: Message content is required
+ *       401:
+ *         description: Missing or invalid user bearer token
+ *       403:
+ *         description: User cannot message this project
+ */
+router.post("/:id/messages", sendProjectMessage);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/tasks:
+ *   post:
+ *     summary: Create a project task
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title]
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 maxLength: 150
+ *               description:
+ *                 type: string
+ *                 maxLength: 2000
+ *               dueDate:
+ *                 type: string
+ *                 format: date-time
+ *               status:
+ *                 type: string
+ *                 enum: [TODO, IN_PROGRESS, COMPLETED]
+ *     responses:
+ *       201:
+ *         description: Task created successfully
+ *       400:
+ *         description: Invalid task input
+ *       401:
+ *         description: Missing or invalid user bearer token
+ *       403:
+ *         description: User cannot create tasks in this project
+ */
+router.post("/:id/tasks", createProjectTask);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/tasks/{taskId}:
+ *   patch:
+ *     summary: Update a project task status
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [TODO, IN_PROGRESS, COMPLETED]
+ *     responses:
+ *       200:
+ *         description: Task status updated successfully
+ *       400:
+ *         description: Invalid task status
+ *       401:
+ *         description: Missing or invalid user bearer token
+ *       403:
+ *         description: User cannot update this task
+ */
+router.patch("/:id/tasks/:taskId", updateProjectTaskStatus);
 
 /**
  * @swagger
@@ -226,6 +402,21 @@ router.get("/marketplace/:id/summary", getMarketplaceSummary);
  *       200:
  *         description: List of applications fetched successfully
  */
+/**
+ * @swagger
+ * /api/v1/projects/invitations/my-invites:
+ *   get:
+ *     summary: List invitations for the authenticated user
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Invitations fetched successfully
+ *       401:
+ *         description: Missing or invalid user bearer token
+ */
+router.get("/invitations/my-invites", getMyInvites);
 router.get("/applications/my-applications", getMyApplications);
 
 /**
@@ -435,6 +626,44 @@ router.get("/:id", getProjectDetails);
  *         description: Project or User not found
  */
 router.post("/:id/invite", inviteCollaborator);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/invitations/respond:
+ *   post:
+ *     summary: Accept or decline a project invitation
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID from the invitation
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [ACCEPT, DECLINE]
+ *     responses:
+ *       200:
+ *         description: Invitation response saved successfully
+ *       400:
+ *         description: Invalid invitation action
+ *       401:
+ *         description: Missing or invalid user bearer token
+ *       404:
+ *         description: Invitation or project not found
+ */
+router.post("/:id/invitations/respond", respondToInvite);
 
 /**
  * @swagger

@@ -113,14 +113,24 @@ router.post("/login", validateRequest(loginSchema), authController.Login);
  * /api/v1/user/profile:
  *   get:
  *     summary: Get user profile
+ *     description: Returns the authenticated normal-user profile. Send the application JWT received after login or Google OAuth in the Authorization header. Admin tokens are not accepted.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Success
+ *         description: Authenticated user profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
  *       401:
- *         description: Unauthorized
+ *         description: Missing, expired, future-issued, invalid, admin, or revoked user token
  */
 router.get("/profile", authMiddleware, authController.profile);
 
@@ -228,10 +238,11 @@ router.post("/reset-password", validateRequest(resetPasswordSchema), authControl
  * /api/v1/user/auth/google:
  *   get:
  *     summary: Redirects to Google Auth Consent Screen
+ *     description: Starts the Google OAuth authorization-code flow. The browser is redirected to Google and then back to the configured callback route.
  *     tags: [Auth]
  *     responses:
  *       302:
- *         description: Redirect to Google
+ *         description: Redirect to Google OAuth consent screen
  */
 router.get("/auth/google", authController.googleLogin);
 
@@ -240,6 +251,7 @@ router.get("/auth/google", authController.googleLogin);
  * /api/v1/user/auth/google/callback:
  *   get:
  *     summary: Google Auth Callback URL
+ *     description: Verifies the Google ID token, creates or links the local user, signs a normal-user application JWT, and redirects to the configured frontend callback. Do not call this endpoint from the frontend.
  *     tags: [Auth]
  *     parameters:
  *       - in: query
@@ -250,7 +262,14 @@ router.get("/auth/google", authController.googleLogin);
  *         description: Authorization code returned by Google
  *     responses:
  *       302:
- *         description: Redirect to frontend with token
+ *         description: Redirect to the frontend OAuth callback with a URL-encoded application token
+ *         headers:
+ *           Location:
+ *             description: Frontend OAuth callback URL. The token query parameter is a browser handoff and must not be logged.
+ *             schema:
+ *               type: string
+ *       400:
+ *         description: Missing authorization code, failed Google verification, or missing frontend configuration
  */
 router.get("/auth/google/callback", authController.googleCallback);
 
@@ -259,6 +278,7 @@ router.get("/auth/google/callback", authController.googleCallback);
  * /api/v1/user/onboarding:
  *   patch:
  *     summary: Update user onboarding status
+ *     description: Updates onboarding for the user identified by the normal-user bearer token.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -276,6 +296,8 @@ router.get("/auth/google/callback", authController.googleCallback);
  *     responses:
  *       200:
  *         description: Onboarding status updated successfully
+ *       401:
+ *         description: Missing, expired, invalid, or non-user bearer token
  */
 router.patch(
   "/onboarding",

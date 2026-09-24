@@ -1,9 +1,6 @@
-const jwt = require("jsonwebtoken");
+const { signJwt } = require("./jwt");
 
-const generateToken = (payload) => {
-  return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
-  });
-};
+const generateUserToken = (payload) => signJwt(payload, "user");
+const generateAdminToken = (payload) => signJwt(payload, "admin");
 
-module.exports = { generateToken };
+module.exports = { generateUserToken, generateAdminToken };

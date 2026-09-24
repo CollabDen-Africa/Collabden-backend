@@ -13,6 +13,8 @@ const registerNotificationListeners = (subscriberClient) => {
   subscriberClient.subscribe(
     EVENT_TYPES.PROJECT_CREATED,
     EVENT_TYPES.COLLABORATOR_INVITED,
+    EVENT_TYPES.COLLABORATOR_INVITE_ACCEPTED,
+    EVENT_TYPES.COLLABORATOR_INVITE_DECLINED,
     EVENT_TYPES.MESSAGE_REQUEST_SENT,
     EVENT_TYPES.MESSAGE_REQUEST_ACCEPTED,
     EVENT_TYPES.MESSAGE_SENT,
@@ -40,6 +42,14 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.COLLABORATOR_INVITED:
           await handleCollaboratorInvited(payload);
+          break;
+
+        case EVENT_TYPES.COLLABORATOR_INVITE_ACCEPTED:
+          await handleCollaboratorInviteAccepted(payload);
+          break;
+
+        case EVENT_TYPES.COLLABORATOR_INVITE_DECLINED:
+          await handleCollaboratorInviteDeclined(payload);
           break;
 
         case EVENT_TYPES.MESSAGE_REQUEST_SENT:
@@ -140,6 +150,68 @@ const handleCollaboratorInvited = async ({ projectId, projectName, collaboratorI
 
   // Push real-time notification to the invited user
   sendToUser(collaboratorId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
+/**
+ * Handle COLLABORATOR_INVITE_ACCEPTED event:
+ * - Notify project owner that someone accepted their invite
+ */
+const handleCollaboratorInviteAccepted = async ({ projectId, projectName, ownerId, collaboratorId }) => {
+  console.log(`[Listener] Processing COLLABORATOR_INVITE_ACCEPTED for project owner ${ownerId}`);
+
+  const canSendInApp = await shouldSend(ownerId, "inApp");
+  if (!canSendInApp) return;
+
+  const collaborator = await prisma.user.findUnique({
+    where: { id: collaboratorId },
+    select: { displayName: true, legalName: true },
+  });
+
+  const collaboratorName = collaborator?.displayName || collaborator?.legalName || "A user";
+
+  const notification = await createNotification({
+    userId: ownerId,
+    title: "Invitation Accepted",
+    message: `${collaboratorName} has accepted your invitation to join "${projectName}".`,
+    type: "INVITE",
+    link: `/projects/${projectId}`,
+  });
+
+  sendToUser(ownerId, {
+    type: "NOTIFICATION",
+    data: notification,
+  });
+};
+
+/**
+ * Handle COLLABORATOR_INVITE_DECLINED event:
+ * - Notify project owner that someone declined their invite
+ */
+const handleCollaboratorInviteDeclined = async ({ projectId, projectName, ownerId, collaboratorId }) => {
+  console.log(`[Listener] Processing COLLABORATOR_INVITE_DECLINED for project owner ${ownerId}`);
+
+  const canSendInApp = await shouldSend(ownerId, "inApp");
+  if (!canSendInApp) return;
+
+  const collaborator = await prisma.user.findUnique({
+    where: { id: collaboratorId },
+    select: { displayName: true, legalName: true },
+  });
+
+  const collaboratorName = collaborator?.displayName || collaborator?.legalName || "A user";
+
+  const notification = await createNotification({
+    userId: ownerId,
+    title: "Invitation Declined",
+    message: `${collaboratorName} declined your invitation to join "${projectName}".`,
+    type: "INVITE",
+    link: `/projects/${projectId}`,
+  });
+
+  sendToUser(ownerId, {
     type: "NOTIFICATION",
     data: notification,
   });

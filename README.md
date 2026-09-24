@@ -31,6 +31,10 @@ DATABASE_URL="postgresql://YOUR_USERNAME@localhost:5432/YOUR_DB_NAME"
 # JWT
 JWT_SECRET="your_generated_secret"
 JWT_EXPIRES_IN="7d"
+JWT_ISSUER="collabden-api"
+JWT_AUDIENCE="collabden-web"
+# Optional; 0-60 seconds only. Defaults to 30.
+JWT_CLOCK_TOLERANCE_SECONDS="30"
 
 # Email (Resend)
 RESEND_API_KEY="re_xxxxxxxxxxxxxxxx"

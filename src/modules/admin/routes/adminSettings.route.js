@@ -105,7 +105,18 @@ router.patch(
 router.get(
   "/users/history",
   checkPermission(ADMIN_PERMISSIONS.SETTINGS_VIEW),
-  validateRequest(getSettingsAuditQuerySchema),
+  (req, res, next) => {
+    const result = getSettingsAuditQuerySchema.safeParse(req.query);
+
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: result.error.issues.map((issue) => issue.message),
+      });
+    }
+
+    next();
+  },
   getSettingsAuditHistoryController
 );
 

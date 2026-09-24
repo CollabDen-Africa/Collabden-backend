@@ -140,7 +140,10 @@ const AuthController = {
       const result = await googleAuthCallbackService(code);
 
       const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL;
-      res.redirect(`${frontendUrl}/api/auth/google/callback?token=${result.token}`);
+      if (!frontendUrl) throw new Error("FRONTEND_URL must be configured for Google OAuth");
+      const redirectUrl = new URL("/api/auth/google/callback", frontendUrl);
+      redirectUrl.searchParams.set("token", result.token);
+      res.redirect(redirectUrl.toString());
     } catch (error) {
       res.status(400).json({ message: error.message });
     }

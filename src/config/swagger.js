@@ -28,6 +28,7 @@ const options = {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
+          description: "Collabden application JWT. User tokens authorize user endpoints; admin tokens authorize admin endpoints only. Use `Authorization: Bearer <token>`.",
         },
       },
     },

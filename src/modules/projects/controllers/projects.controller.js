@@ -1,8 +1,14 @@
 const {
   createProjectService,
+  uploadProjectFileService,
+  sendProjectMessageService,
+  createProjectTaskService,
+  updateProjectTaskStatusService,
   getProjectListService,
   getProjectDetailsService,
   inviteCollaboratorService,
+  respondToInviteService,
+  getMyInvitesService,
   updateProjectService,
   deleteProjectService,
   removeCollaboratorService,
@@ -48,6 +54,74 @@ const createProject = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+const uploadProjectFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded." });
+    }
+
+    const projectFile = await uploadProjectFileService(
+      req.params.id,
+      req.user.id,
+      req.file,
+    );
+    return res.status(201).json({ file: projectFile });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const sendProjectMessage = async (req, res) => {
+  try {
+    const content = req.body?.content?.trim();
+    if (!content) return res.status(400).json({ error: "Message content is required." });
+
+    const message = await sendProjectMessageService(req.params.id, req.user.id, content);
+    return res.status(201).json({ message });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const createProjectTask = async (req, res) => {
+  try {
+    const title = req.body?.title?.trim();
+    const { description, dueDate, status } = req.body || {};
+
+    if (!title) return res.status(400).json({ error: "Task title is required." });
+    if (title.length > 150) return res.status(400).json({ error: "Task title cannot exceed 150 characters." });
+    if (description && description.length > 2000) return res.status(400).json({ error: "Task description cannot exceed 2000 characters." });
+    if (dueDate && Number.isNaN(new Date(dueDate).getTime())) return res.status(400).json({ error: "Due date is invalid." });
+    if (status && !["TODO", "IN_PROGRESS", "COMPLETED"].includes(status)) {
+      return res.status(400).json({ error: "Task status is invalid." });
+    }
+
+    const task = await createProjectTaskService(req.params.id, req.user.id, {
+      title,
+      description: description?.trim(),
+      dueDate,
+      status,
+    });
+    return res.status(201).json({ task });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const updateProjectTaskStatus = async (req, res) => {
+  try {
+    const { status } = req.body || {};
+    if (!["TODO", "IN_PROGRESS", "COMPLETED"].includes(status)) {
+      return res.status(400).json({ error: "Task status is invalid." });
+    }
+
+    const task = await updateProjectTaskStatusService(req.params.id, req.params.taskId, req.user.id, status);
+    return res.status(200).json({ task });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
   }
 };
 
@@ -205,11 +279,47 @@ const reportProject = async (req, res) => {
   }
 };
 
+const respondToInvite = async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const { action } = req.body;
+    const userId = req.user.id;
+
+    if (!action || !["ACCEPT", "DECLINE"].includes(action)) {
+      return res.status(400).json({ error: "Action must be ACCEPT or DECLINE" });
+    }
+
+    const updated = await respondToInviteService(projectId, userId, action);
+    res.status(200).json({
+      message: `Invitation ${action.toLowerCase()}d successfully`,
+      collaborator: updated,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getMyInvites = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const invites = await getMyInvitesService(userId);
+    res.status(200).json(invites);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createProject,
+  uploadProjectFile,
+  sendProjectMessage,
+  createProjectTask,
+  updateProjectTaskStatus,
   getProjects,
   getProjectDetails,
   inviteCollaborator,
+  respondToInvite,
+  getMyInvites,
   updateProject,
   deleteProject,
   removeCollaborator,
@@ -217,4 +327,4 @@ module.exports = {
   getMarketplace,
   getMarketplaceSummary,
   reportProject,
-}
+};

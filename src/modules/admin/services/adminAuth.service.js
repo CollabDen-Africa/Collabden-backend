@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const prisma = require("../../../config/prismaClient");
 const { sendEmail } = require("../../../utils/sendEmail");
-const { generateToken } = require("../../../utils/generateToken");
+const { generateAdminToken } = require("../../../utils/generateToken");
 const { getPasswordResetEmailTemplate, getAdmin2FAEmailTemplate } = require("../../../utils/emailTemplates");
 const { ACCOUNT_STATUS } = require("../../../config/constants");
 
@@ -102,7 +102,7 @@ const adminLoginService = async ({ email, password, ipAddress, userAgent }) => {
     }
   });
 
-  const token = generateToken({
+  const token = generateAdminToken({
     id: admin.id,
     email: admin.email,
     role: admin.role,
@@ -184,7 +184,7 @@ const adminVerify2FAService = async (adminId, code, ipAddress, userAgent) => {
     }
   });
 
-  const token = generateToken({
+  const token = generateAdminToken({
     id: admin.id,
     email: admin.email,
     role: admin.role,
