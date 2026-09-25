@@ -1,75 +1,105 @@
-const getBaseEmailLayout = ({
+/**
+ * Shared CollabDen email shell.
+ *
+ * Keep email-specific content in `content` and pass it here so every email has
+ * the same neutral surface, slate borders, and CollabDen green accent.
+ */
+const getCollabDenEmailTemplate = ({
   headerTitle,
   headerSubtitle = "",
-  headerBackground = "linear-gradient(135deg, #204f99 0%, #73bf44 100%)",
-  footerBackground = "linear-gradient(135deg, #204f99 0%, #1a3f7a 100%)",
   content,
+  preheader = headerSubtitle || headerTitle,
 }) => `
   <!DOCTYPE html>
   <html>
     <head>
       <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-          background-color: #f0f4f8;
+          background-color: #f3f5f7;
           margin: 0;
-          padding: 0;
+          padding: 24px 12px;
+          color: #1f2937;
         }
         .container {
           max-width: 600px;
-          margin: 20px auto;
+          margin: 0 auto;
           background-color: #ffffff;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          border: 1px solid #d9e0e8;
+          border-radius: 20px;
+          box-shadow: 0 12px 32px rgba(31,41,55,0.12);
           overflow: hidden;
         }
-        .header {
-          color: white;
-          padding: 40px 20px;
+        .preheader { display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent; }
+        .brand-bar { padding: 22px 30px 0; background-color: #ffffff; }
+        .brand-mark {
+          display: inline-block;
+          background-color: #74c83d;
+          border-radius: 10px;
+          color: #ffffff;
+          font-size: 14px;
+          font-weight: 800;
+          letter-spacing: -1px;
+          line-height: 36px;
           text-align: center;
+          width: 36px;
+        }
+        .brand-name { color: #1f2937; font-size: 20px; font-weight: 700; margin-left: 10px; vertical-align: middle; }
+        .brand-tier { color: #6b7280; font-size: 12px; margin-left: 8px; vertical-align: middle; }
+        .header {
+          color: #1f2937;
+          padding: 26px 30px 30px;
+          background-color: #ffffff;
         }
         .header h1 {
           margin: 0 0 6px 0;
-          font-size: 26px;
+          font-size: 27px;
           font-weight: 700;
-          letter-spacing: -0.5px;
+          letter-spacing: -0.7px;
         }
         .header p {
           margin: 0;
           font-size: 14px;
-          opacity: 0.85;
+          color: #6b7280;
         }
         .content {
-          padding: 40px 30px;
-          color: #333333;
+          padding: 32px 30px;
+          color: #4b5563;
         }
         .content h2 {
           margin-top: 0;
           font-size: 20px;
           font-weight: 600;
+          color: #1f2937 !important;
         }
+        .content p { line-height: 1.6; }
         .footer {
-          padding: 24px 20px;
+          padding: 22px 30px;
           text-align: center;
-          color: rgba(255,255,255,0.75);
+          background-color: #f8fafc;
+          border-top: 1px solid #d9e0e8;
+          color: #6b7280;
           font-size: 12px;
         }
         .footer a {
-          color: #73bf44;
+          color: #74c83d;
           text-decoration: none;
           font-weight: 600;
         }
         .divider {
           height: 1px;
-          background: linear-gradient(to right, transparent, #e0e0e0, transparent);
+          background: #d9e0e8;
           margin: 30px 0;
         }
         .amount-box {
           text-align: center;
           margin: 28px 0;
           padding: 24px;
-          border-radius: 12px;
+          background: #f8fafc !important;
+          border: 1px solid #d9e0e8 !important;
+          border-radius: 14px;
         }
         .amount-label {
           font-size: 13px;
@@ -90,16 +120,16 @@ const getBaseEmailLayout = ({
         .details-table td {
           padding: 10px 0;
           font-size: 14px;
-          border-bottom: 1px solid #f0f0f0;
+          border-bottom: 1px solid #d9e0e8;
         }
         .details-table td:first-child {
-          color: #888;
+          color: #6b7280;
           width: 40%;
         }
         .details-table td:last-child {
           font-weight: 600;
           text-align: right;
-          color: #333;
+          color: #1f2937;
         }
         .status-badge {
           display: inline-block;
@@ -111,27 +141,30 @@ const getBaseEmailLayout = ({
           letter-spacing: 0.5px;
         }
         .info-box {
-          border-radius: 8px;
+          background-color: #f8fafc !important;
+          border: 1px solid #d9e0e8;
+          border-radius: 10px;
           padding: 14px 16px;
           font-size: 13px;
           margin: 20px 0;
+          color: #4b5563 !important;
         }
         .reset-button {
           display: inline-block;
-          background-color: #667eea;
-          color: white;
+          background-color: #74c83d;
+          color: #132019;
           padding: 12px 30px;
           text-decoration: none;
-          border-radius: 6px;
+          border-radius: 999px;
           margin: 30px 0;
           font-weight: 600;
           transition: background-color 0.3s;
         }
         .reset-button:hover {
-          background-color: #5568d3;
+          background-color: #8bd954;
         }
         .link-text {
-          color: #666666;
+          color: #6b7280;
           font-size: 12px;
           margin-top: 20px;
           word-break: break-all;
@@ -142,43 +175,54 @@ const getBaseEmailLayout = ({
         }
         .otp-label {
           font-size: 13px;
-          color: #888;
+          color: #6b7280;
           text-transform: uppercase;
           letter-spacing: 1px;
           margin-bottom: 12px;
         }
         .otp-code {
           display: inline-block;
-          background: linear-gradient(135deg, #eef3fc 0%, #f2fae8 100%);
-          border: 2px dashed #73bf44;
+          background: #f8fafc;
+          border: 2px dashed #74c83d;
           border-radius: 12px;
           padding: 18px 44px;
           font-size: 40px;
           font-weight: 800;
           letter-spacing: 12px;
-          color: #204f99;
+          color: #1f2937;
         }
         .expiry-note {
-          background-color: #fffbf0;
-          border-left: 4px solid #f6a623;
+          background-color: #f8fafc;
+          border-left: 4px solid #74c83d;
           padding: 12px 15px;
           margin: 24px 0;
           border-radius: 4px;
           font-size: 14px;
-          color: #555;
+          color: #4b5563;
         }
-        .warning-message {
-          background-color: #fef3cd;
-          border-left: 4px solid #ffc107;
-          padding: 15px;
+        .success-message, .warning-message {
+          background-color: #f8fafc;
+          border-left: 4px solid #74c83d;
+          border-radius: 8px;
+          color: #4b5563;
           margin: 20px 0;
-          border-radius: 4px;
+          padding: 14px 16px;
+        }
+        .warning-message { border-left-color: #f6a623; }
+        @media only screen and (max-width: 620px) {
+          body { padding: 0 !important; }
+          .container { border-radius: 0 !important; border-left: 0 !important; border-right: 0 !important; }
+          .brand-bar, .header, .content, .footer { padding-left: 20px !important; padding-right: 20px !important; }
         }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="header" style="background: ${headerBackground};">
+        <div class="preheader">${preheader}</div>
+        <div class="brand-bar">
+          <span class="brand-mark">CD</span><span class="brand-name">CollabDen</span><span class="brand-tier">Studio Pro</span>
+        </div>
+        <div class="header">
           <h1>${headerTitle}</h1>
           ${headerSubtitle ? `<p>${headerSubtitle}</p>` : ""}
         </div>
@@ -187,7 +231,7 @@ const getBaseEmailLayout = ({
           ${content}
         </div>
         
-        <div class="footer" style="background: ${footerBackground};">
+        <div class="footer">
           <p style="margin: 0;">&copy; ${new Date().getFullYear()} CollabDen. All rights reserved.</p>
           <p style="margin: 5px 0 0 0;">Need help? Contact us at support@collabden.com</p>
         </div>
@@ -195,6 +239,43 @@ const getBaseEmailLayout = ({
     </body>
   </html>
 `;
+
+// Backward-compatible alias for existing template builders.
+const getBaseEmailLayout = getCollabDenEmailTemplate;
+
+const escapeHtml = (value) => String(value || "").replace(/[&<>"]/g, (character) => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+}[character]));
+
+/**
+ * Branded template for notification emails that need a single call to action.
+ */
+const getNotificationEmailTemplate = ({
+  heading,
+  message,
+  actionLabel = "View notification",
+  actionUrl,
+}) => {
+  const content = `
+    <h2>${escapeHtml(heading)}</h2>
+    <p>${escapeHtml(message)}</p>
+    ${actionUrl ? `<div style="text-align: center;"><a href="${escapeHtml(actionUrl)}" class="reset-button">${escapeHtml(actionLabel)}</a></div>` : ""}
+    <p style="color: #6b7280; font-size: 13px;">You can manage notification preferences from your CollabDen account.</p>
+  `;
+
+  return {
+    html: getCollabDenEmailTemplate({
+      headerTitle: heading,
+      headerSubtitle: "CollabDen notification",
+      content,
+      preheader: message,
+    }),
+    text: `${heading}\n\n${message}${actionUrl ? `\n\n${actionLabel}: ${actionUrl}` : ""}`,
+  };
+};
 
 const getVerificationEmailTemplate = (verificationToken) => {
   const content = `
@@ -588,6 +669,9 @@ const getAdmin2FAEmailTemplate = (code) => {
 };
 
 module.exports = {
+  getCollabDenEmailTemplate,
+  getBaseEmailLayout,
+  getNotificationEmailTemplate,
   getVerificationEmailTemplate,
   getPasswordResetEmailTemplate,
   getWalletFundedEmailTemplate,
