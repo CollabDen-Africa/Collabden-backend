@@ -62,6 +62,24 @@ Production
    npm start
    Server runs on http://localhost:5050 by default.
 
+# Authentication Routes
+
+Interactive API documentation is available at `GET /api-docs` while the server is running.
+
+| Method | Route | Authentication | Description |
+| --- | --- | --- | --- |
+| GET | `/api/v1/user/auth/google` | None | Starts Google OAuth and redirects to Google's consent screen. |
+| GET | `/api/v1/user/auth/google/callback?code=...` | Google callback | Verifies the Google ID token, finds or creates the user, then redirects to `${FRONTEND_URL}/api/auth/google/callback` with an application JWT. This endpoint is called by Google, not directly by the frontend. |
+| GET | `/api/v1/user/profile` | User bearer token | Returns the authenticated normal-user profile. Use `Authorization: Bearer <token>`. |
+| PATCH | `/api/v1/user/onboarding` | User bearer token | Updates the authenticated user's onboarding status. |
+| GET | `/api/v1/admin/auth/me` | Admin bearer token | Returns the authenticated admin profile. A valid normal-user token receives `403 Forbidden: Admin token required`. |
+
+OAuth flow: Google callback → Google ID-token verification → user lookup/create → application JWT signing → frontend redirect → `GET /api/v1/user/profile`.
+
+User and admin JWTs are intentionally distinct. Tokens are signed with `HS256`, include issuer/audience and UTC NumericDate claims (`iat`, `nbf`, `exp`), and may only differ from verifier time by `JWT_CLOCK_TOLERANCE_SECONDS`. Tokens issued before the JWT claim/type policy was introduced require a new login.
+
+Do not log, persist, or expose OAuth authorization codes or bearer tokens. The frontend should consume the redirect token immediately in memory and then use it only in the `Authorization` header.
+
 # Prisma Workflow
 Every time you change the schema:
 # 1. Edit your model file in prisma/schema/
