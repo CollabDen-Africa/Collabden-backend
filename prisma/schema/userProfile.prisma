@@ -33,8 +33,14 @@ model UserProfile {
   lastName                String?
   avatarUrl               String?
   bio                     String?
+  role                    String?
+  location                String?
+  yearsOfExperience       Int?
+  creativePhilosophy      String?
   experience              String?
   skills                  String[]
+  specializations         String[]              @default([])
+  primaryRoles            String[]              @default([])
   genres                  String[]
   portfolioLinks          String[]
   socialLinks             String[]

@@ -13,6 +13,7 @@ const {
 } = require("../../../schemas/profile.schema");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const { avatarUpload } = require("../../../middleware/avatarUpload.middleware");
+const { checkStorageLimit } = require("../../../middleware/storageLimit.middleware");
 const router = Router();
 
 /**
@@ -159,6 +160,7 @@ router.patch("/password", authMiddleware, validateRequest(changePasswordSchema),
 router.post(
   "/avatar/upload",
   authMiddleware,
+  checkStorageLimit,
   avatarUpload.single("avatar"),
   (err, req, res, next) => {
     // Handle multer errors (file too large, wrong type) inline

@@ -18,8 +18,14 @@ const updateProfile = async (req, res) => {
       "lastName",
       "avatarUrl",
       "bio",
+      "role",
+      "location",
+      "yearsOfExperience",
+      "creativePhilosophy",
       "experience",
       "skills",
+      "specializations",
+      "primaryRoles",
       "genres",
       "portfolioLinks",
       "socialLinks",
@@ -231,26 +237,42 @@ const uploadAvatar = async (req, res) => {
     if (!supabase) {
       return res
         .status(500)
-        .json({ error: "Storage service is not configured." });
+        .json({ error: "Error uploading your picture. Try again later." });
     }
 
     const userId = req.user.id;
     const ext = path.extname(req.file.originalname).toLowerCase() || ".jpg";
+    const storagePath = `${userId}/avatar_${Date.now()}${ext}`;
 
-    const storagePath = `${userId}/avatar${ext}`;
-
-    const { error: uploadError } = await supabase.storage
+    let { error: uploadError } = await supabase.storage
       .from(AVATAR_BUCKET)
       .upload(storagePath, req.file.buffer, {
         contentType: req.file.mimetype,
         upsert: true,
       });
 
+    // If bucket does not exist yet, attempt to create it and retry upload
+    if (
+      uploadError &&
+      (uploadError.statusCode === "404" ||
+        uploadError.error === "Bucket not found" ||
+        uploadError.message?.toLowerCase().includes("not found"))
+    ) {
+      await supabase.storage.createBucket(AVATAR_BUCKET, { public: true });
+      const retryResult = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(storagePath, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true,
+        });
+      uploadError = retryResult.error;
+    }
+
     if (uploadError) {
       console.error("Supabase upload error:", uploadError);
       return res
         .status(500)
-        .json({ error: "Failed to upload image. Please try again." });
+        .json({ error: `Supabase storage upload failed: ${uploadError.message}` });
     }
 
     const { data: publicUrlData } = supabase.storage
@@ -266,10 +288,10 @@ const uploadAvatar = async (req, res) => {
 
     res
       .status(200)
-      .json({ message: "Profile picture updated successfully.", avatarUrl });
+      .json({ message: "Profile picture uploaded to Supabase storage successfully.", avatarUrl });
   } catch (error) {
-    console.error("Error uploading avatar:", error);
-    res.status(500).json({ error: "Failed to upload profile picture." });
+    console.error("Error uploading avatar to Supabase:", error);
+    res.status(500).json({ error: error.message || "Failed to upload profile picture." });
   }
 };
 
