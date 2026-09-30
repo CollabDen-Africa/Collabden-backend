@@ -3,6 +3,44 @@ const { createNotification } = require("../../modules/notifications/services/not
 const { shouldSend } = require("../../modules/notifications/services/notificationSetting.service");
 const { sendToUser } = require("../../config/websocket");
 const prisma = require("../../config/prismaClient");
+const { sendEmail } = require("../../utils/sendEmail");
+const { getNotificationEmailTemplate } = require("../../utils/emailTemplates");
+
+const getUserForNotification = (userId) => prisma.userProfile.findUnique({
+  where: { id: userId },
+  select: { email: true, displayName: true, legalName: true, firstName: true, lastName: true },
+});
+
+const getUserName = (user) => user?.displayName || user?.legalName ||
+  [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "A collaborator";
+
+const sendInvitationEmail = async ({ recipientId, subject, heading, message, link, actionLabel }) => {
+  if (!(await shouldSend(recipientId, "email"))) return;
+
+  const recipient = await getUserForNotification(recipientId);
+  if (!recipient?.email) return;
+
+  const appUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL || "http://localhost:3000";
+  const invitationUrl = `${appUrl.replace(/\/$/, "")}${link}`;
+  const emailTemplate = getNotificationEmailTemplate({
+    heading,
+    message,
+    actionLabel,
+    actionUrl: invitationUrl,
+  });
+
+  try {
+    await sendEmail({
+      to: recipient.email,
+      subject,
+      text: emailTemplate.text,
+      html: emailTemplate.html,
+    });
+  } catch (error) {
+    // Email failures must not prevent the persisted in-app notification.
+    console.error(`[Invitation Email Error] Failed to email user ${recipientId}:`, error.message);
+  }
+};
 
 /**
  * Register all notification-related event listeners on the Redis subscriber.
@@ -135,23 +173,29 @@ const handleCollaboratorInvited = async ({ projectId, projectName, collaboratorI
   console.log(`[Listener] Processing COLLABORATOR_INVITED for user ${collaboratorId}`);
 
   const canSendInApp = await shouldSend(collaboratorId, "inApp");
-  if (!canSendInApp) {
+  if (canSendInApp) {
+    const notification = await createNotification({
+      userId: collaboratorId,
+      title: "New Project Invitation",
+      message: `You have been invited to collaborate on "${projectName}".`,
+      type: "INVITE",
+      link: `/projects/${projectId}`,
+    });
+
+    sendToUser(collaboratorId, {
+      type: "NOTIFICATION",
+      data: notification,
+    });
+  } else {
     console.log(`[Listener] Skipping in-app notification for user ${collaboratorId} (settings disabled)`);
-    return;
   }
 
-  const notification = await createNotification({
-    userId: collaboratorId,
-    title: "New Project Invitation",
-    message: `You have been invited to collaborate on "${projectName}".`,
-    type: "INVITE",
+  await sendInvitationEmail({
+    recipientId: collaboratorId,
+    subject: "You've been invited to collaborate on CollabDen",
+    heading: "New project invitation",
+    message: `You've been invited to collaborate on "${projectName}".`,
     link: `/projects/${projectId}`,
-  });
-
-  // Push real-time notification to the invited user
-  sendToUser(collaboratorId, {
-    type: "NOTIFICATION",
-    data: notification,
   });
 };
 
@@ -332,30 +376,34 @@ const handleConnectionRequestSent = async ({ senderId, receiverId, connectionId 
   console.log(`[Listener] Processing CONNECTION_REQUEST_SENT for user ${receiverId}`);
 
   // Fetch sender profile details to display their name
-  const sender = await prisma.userProfile.findUnique({
-    where: { id: senderId },
-    select: { displayName: true, firstName: true, lastName: true },
-  });
-  const senderName = sender ? (sender.displayName || `${sender.firstName} ${sender.lastName}`) : "A collaborator";
+  const sender = await getUserForNotification(senderId);
+  const senderName = getUserName(sender);
 
   const canSendInApp = await shouldSend(receiverId, "inApp");
-  if (!canSendInApp) {
+  if (canSendInApp) {
+    const notification = await createNotification({
+      userId: receiverId,
+      title: "New Connection Request",
+      message: `${senderName} sent you a connection request.`,
+      type: "CONNECTION_REQUEST",
+      link: "/workspace",
+    });
+
+    sendToUser(receiverId, {
+      type: "NOTIFICATION",
+      data: notification,
+    });
+  } else {
     console.log(`[Listener] Skipping in-app notification for user ${receiverId} (settings disabled)`);
-    return;
   }
 
-  const notification = await createNotification({
-    userId: receiverId,
-    title: "New Connection Request",
+  await sendInvitationEmail({
+    recipientId: receiverId,
+    subject: "You have a new connection request on CollabDen",
+    heading: "New connection request",
     message: `${senderName} sent you a connection request.`,
-    type: "CONNECTION_REQUEST",
-    link: `/profile/connections`,
-  });
-
-  // Push real-time notification to the receiver
-  sendToUser(receiverId, {
-    type: "NOTIFICATION",
-    data: notification,
+    link: "/workspace",
+    actionLabel: "View connection request",
   });
 };
 
@@ -513,4 +561,3 @@ const handleUserModerated = async ({ userId, action, reason }) => {
 };
 
 module.exports = { registerNotificationListeners };
-

@@ -3,6 +3,35 @@ const { publishEvent } = require("../../../events/publisher");
 const EVENT_TYPES = require("../../../events/eventTypes");
 const walletService = require("../../payments/services/wallet.service");
 const invoiceService = require("./invoice.service");
+const supabase = require("../../../config/supabase");
+
+const calculateUserStorageGB = async (userId) => {
+  if (!supabase) return 0;
+  
+  const BUCKETS = ["user-avatars", "agreements", "project-files", "messaging-attachments"];
+  let totalBytes = 0;
+
+  for (const bucket of BUCKETS) {
+    try {
+      const { data } = await supabase.storage.from(bucket).list(userId, {
+        limit: 100,
+        offset: 0,
+      });
+      if (data && Array.isArray(data)) {
+        for (const item of data) {
+          if (item.metadata && item.metadata.size) {
+            totalBytes += item.metadata.size;
+          }
+        }
+      }
+    } catch (err) {
+      // Ignore missing bucket or permission errors
+    }
+  }
+
+  const gb = totalBytes / (1024 * 1024 * 1024);
+  return Math.max(0, Number(gb.toFixed(3)));
+};
 
 
 const getPlans = async () => {
@@ -18,6 +47,8 @@ const getPlanByTier = async (tier) => {
 };
 
 const getCurrentSubscription = async (userId) => {
+  const usedStorageGB = await calculateUserStorageGB(userId);
+
   const subscription = await prisma.subscription.findUnique({
     where: { userId },
   });
@@ -28,6 +59,7 @@ const getCurrentSubscription = async (userId) => {
       tier: "BASIC",
       status: "ACTIVE",
       plan: basicPlan,
+      usedStorageGB,
     };
   }
 
@@ -35,6 +67,7 @@ const getCurrentSubscription = async (userId) => {
   return {
     ...subscription,
     plan,
+    usedStorageGB,
   };
 };
 

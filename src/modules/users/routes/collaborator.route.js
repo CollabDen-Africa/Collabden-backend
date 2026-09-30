@@ -19,6 +19,8 @@ const router = Router();
  *   get:
  *     summary: Retrieve collaborator profiles for the marketplace with filters
  *     tags: [Collaborators]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: name
@@ -54,7 +56,9 @@ const router = Router();
  *             schema:
  *               type: array
  */
-router.get("/", getCollaborators);
+// The controller excludes req.user.id from marketplace results. Authentication is
+// required here so that identity is available for every marketplace request.
+router.get("/", authMiddleware, getCollaborators);
 
 router.get("/connected", authMiddleware, getConnectedCollaborators);
 
