@@ -76,7 +76,40 @@ const respondToConnectionRequest = async (connectionId, userId, status) => {
   return updatedConnection;
 };
 
-const getConnections = async (userId) => {
+const getConnections = async (userId, filters = {}) => {
+  const { projectId, excludeProjectId } = filters;
+  const targetProjectId = projectId || excludeProjectId;
+
+  const excludedUserIds = new Set([userId]);
+
+  if (targetProjectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: targetProjectId },
+      select: {
+        ownerId: true,
+        collaborators: {
+          where: {
+            OR: [
+              { isActive: true },
+              { inviteStatus: "PENDING" },
+              { inviteStatus: "ACCEPTED" },
+            ],
+          },
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (project) {
+      if (project.ownerId) excludedUserIds.add(project.ownerId);
+      if (Array.isArray(project.collaborators)) {
+        project.collaborators.forEach((c) => {
+          if (c.userId) excludedUserIds.add(c.userId);
+        });
+      }
+    }
+  }
+
   const connections = await prisma.userConnection.findMany({
     where: {
       OR: [
@@ -86,18 +119,18 @@ const getConnections = async (userId) => {
     },
     include: {
       sender: {
-        select: { id: true, email: true },
+        select: { id: true, email: true, displayName: true, legalName: true, avatarUrl: true },
       },
       receiver: {
-        select: { id: true, email: true },
+        select: { id: true, email: true, displayName: true, legalName: true, avatarUrl: true },
       },
     },
   });
 
   // Map to return the other user's info
-  return connections.map(conn => {
-    return conn.senderId === userId ? conn.receiver : conn.sender;
-  });
+  return connections
+    .map((conn) => (conn.senderId === userId ? conn.receiver : conn.sender))
+    .filter((user) => user && !excludedUserIds.has(user.id));
 };
 
 const getPendingRequests = async (userId) => {

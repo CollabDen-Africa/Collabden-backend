@@ -112,12 +112,31 @@ const sendProjectMessageService = async (projectId, userId, content) => {
         { collaborators: { some: { userId, isActive: true } } },
       ],
     },
-    select: { id: true },
+    select: {
+      id: true,
+      ownerId: true,
+      collaborators: {
+        where: { isActive: true },
+        select: { userId: true },
+      },
+    },
   });
 
   if (!project) {
     const error = new Error("Project not found or you do not have permission to send messages.");
     error.status = 404;
+    throw error;
+  }
+
+  const activeCollaborators = project.collaborators.filter(
+    (c) => c.userId !== project.ownerId
+  );
+
+  if (activeCollaborators.length === 0) {
+    const error = new Error(
+      "Cannot send messages. There are no active collaborators in this project yet. Invite collaborators to start messaging."
+    );
+    error.status = 400;
     throw error;
   }
 
@@ -579,6 +598,12 @@ const getProjectDetailsService = async (projectId, userId) => {
     include: {
       owner: true,
       collaborators: {
+        where: {
+          OR: [
+            { isActive: true },
+            { inviteStatus: "PENDING" },
+          ],
+        },
         include: {
           user: true,
         },
@@ -986,11 +1011,42 @@ const deleteProjectService = async (projectId, userId) => {
     throw new Error("Only the project owner can delete this project.");
   }
 
-  // Soft delete
+  // Soft delete — also set status to INACTIVE so deleted projects don't appear in active counts
   await prisma.project.update({
     where: { id: projectId },
-    data: { isDeleted: true },
+    data: { isDeleted: true, status: "INACTIVE" },
   });
+
+  // 1. Record project activity log
+  try {
+    await prisma.activityLog.create({
+      data: {
+        projectId,
+        action: "PROJECT_DELETED",
+        details: `Project "${project.name}" was soft-deleted by owner.`,
+      },
+    });
+  } catch (err) {
+    console.error("Failed to create activity log on project deletion:", err);
+  }
+
+  // 2. Record user audit log
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: "PROJECT_DELETED",
+        changes: {
+          projectId,
+          projectName: project.name,
+          isDeleted: true,
+          deletedAt: new Date().toISOString(),
+        },
+      },
+    });
+  } catch (err) {
+    console.error("Failed to create audit log on project deletion:", err);
+  }
 
   await publishEvent(EVENT_TYPES.PROJECT_DELETED, {
     projectId,
@@ -1009,15 +1065,15 @@ const removeCollaboratorService = async (
   // 1. Fetch project to check ownership
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { ownerId: true, isDeleted: true },
+    select: { id: true, name: true, ownerId: true, isDeleted: true },
   });
 
   if (!project || project.isDeleted) {
     throw new Error("Project not found.");
   }
 
-  // 2. Find the active collaborator record
-  const collaboratorRecord = await prisma.projectCollaborator.findUnique({
+  // 2. Find the collaborator record (by userId or record id)
+  let collaboratorRecord = await prisma.projectCollaborator.findUnique({
     where: {
       projectId_userId: {
         projectId,
@@ -1027,12 +1083,21 @@ const removeCollaboratorService = async (
   });
 
   if (!collaboratorRecord) {
+    collaboratorRecord = await prisma.projectCollaborator.findFirst({
+      where: {
+        id: targetUserId,
+        projectId,
+      },
+    });
+  }
+
+  if (!collaboratorRecord) {
     throw new Error("User is not a collaborator on this project.");
   }
 
   // 3. Permission Check: Only owner can remove others, or a collaborator can remove themselves
   if (project.ownerId !== requesterId && targetUserId !== requesterId) {
-    throw new Error("You do not have permission to remove this collaborator.");
+    throw new Error("You do not have permission to perform this action.");
   }
 
   // 4. Safety Check: Cannot remove the owner
@@ -1040,7 +1105,29 @@ const removeCollaboratorService = async (
     throw new Error("The project owner cannot be removed from the project.");
   }
 
-  // 5. Remove the collaborator (soft delete)
+  const isPending = collaboratorRecord.inviteStatus === "PENDING" && !collaboratorRecord.isActive;
+
+  if (isPending) {
+    // If the invite is pending and owner cancels it, mark as CANCELLED
+    await prisma.projectCollaborator.update({
+      where: { id: collaboratorRecord.id },
+      data: {
+        isActive: false,
+        inviteStatus: "CANCELLED",
+      },
+    });
+
+    await publishEvent(EVENT_TYPES.COLLABORATOR_INVITE_CANCELLED, {
+      projectId,
+      projectName: project.name,
+      cancelledUserId: targetUserId,
+      ownerId: project.ownerId,
+    });
+
+    return { message: "Collaboration invitation cancelled successfully." };
+  }
+
+  // 5. Remove active collaborator (soft delete)
   await prisma.projectCollaborator.update({
     where: { id: collaboratorRecord.id },
     data: { isActive: false },
@@ -1151,6 +1238,7 @@ const getMarketplaceProjectsService = async (userId, filters = {}) => {
     isDeleted: false,
     visibility: "PUBLIC",
     openToCollaborators: true,
+    ownerId: { not: userId },
     AND: [],
   };
 

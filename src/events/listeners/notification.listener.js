@@ -20,8 +20,19 @@ const sendInvitationEmail = async ({ recipientId, subject, heading, message, lin
   const recipient = await getUserForNotification(recipientId);
   if (!recipient?.email) return;
 
-  const appUrl = process.env.FRONTEND_URL || process.env.NEXT_APP_URL || "http://localhost:3000";
-  const invitationUrl = `${appUrl.replace(/\/$/, "")}${link}`;
+  const getAppFrontendUrl = () => {
+    if (process.env.NODE_ENV === "production") {
+      const prodUrl =
+        process.env.PROD_FRONTEND_URL ||
+        (process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes("localhost") ? process.env.FRONTEND_URL : null) ||
+        process.env.NEXT_APP_URL ||
+        "https://collabden.com";
+      return prodUrl.replace(/\/$/, "");
+    }
+    return (process.env.FRONTEND_URL || process.env.NEXT_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  };
+  const appUrl = getAppFrontendUrl();
+  const invitationUrl = `${appUrl}${link.startsWith("/") ? link : `/${link}`}`;
   const emailTemplate = getNotificationEmailTemplate({
     heading,
     message,

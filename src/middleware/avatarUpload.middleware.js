@@ -1,7 +1,7 @@
 const multer = require("multer");
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const MAX_SIZE_BYTES = 2 * 1024 * 1024;
+const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
