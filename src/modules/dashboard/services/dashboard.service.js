@@ -12,6 +12,7 @@ const prisma = require("../../../config/prismaClient");
 const getUserActiveProjects = async (userId) => {
   return await prisma.project.findMany({
     where: {
+      isDeleted: false,
       OR: [
         { ownerId: userId },
         {
@@ -30,6 +31,23 @@ const getUserActiveProjects = async (userId) => {
         select: {
           id: true,
           email: true,
+          displayName: true,
+          legalName: true,
+          avatarUrl: true,
+        },
+      },
+      collaborators: {
+        where: { isActive: true, role: { not: "OWNER" } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              displayName: true,
+              legalName: true,
+              avatarUrl: true,
+            },
+          },
         },
       },
       activities: {

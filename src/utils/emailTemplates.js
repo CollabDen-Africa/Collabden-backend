@@ -1,3 +1,24 @@
+const DEFAULT_LOGO_URL =
+  "https://oiekbvaydgttdkwhhpwj.supabase.co/storage/v1/object/public/public-assets/collabden-green.png";
+
+const getLogoUrl = () => {
+  if (process.env.EMAIL_LOGO_URL) {
+    return process.env.EMAIL_LOGO_URL;
+  }
+
+  if (
+    process.env.FRONTEND_URL &&
+    !process.env.FRONTEND_URL.includes("localhost") &&
+    !process.env.FRONTEND_URL.includes("127.0.0.1")
+  ) {
+    return `${process.env.FRONTEND_URL.replace(/\/+$/, "")}/collabden-green.png`;
+  }
+  if (process.env.PROD_FRONTEND_URL) {
+    return `${process.env.PROD_FRONTEND_URL.replace(/\/+$/, "")}/collabden-green.png`;
+  }
+  return DEFAULT_LOGO_URL;
+};
+
 /**
  * Shared CollabDen email shell.
  *
@@ -9,6 +30,7 @@ const getCollabDenEmailTemplate = ({
   headerSubtitle = "",
   content,
   preheader = headerSubtitle || headerTitle,
+  logoUrl = getLogoUrl(),
 }) => `
   <!DOCTYPE html>
   <html>
@@ -34,6 +56,14 @@ const getCollabDenEmailTemplate = ({
         }
         .preheader { display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent; }
         .brand-bar { padding: 22px 30px 0; background-color: #ffffff; }
+        .brand-logo {
+          display: inline-block;
+          vertical-align: middle;
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
+          object-fit: contain;
+        }
         .brand-mark {
           display: inline-block;
           background-color: #74c83d;
@@ -220,7 +250,16 @@ const getCollabDenEmailTemplate = ({
       <div class="container">
         <div class="preheader">${preheader}</div>
         <div class="brand-bar">
-          <span class="brand-mark">CD</span><span class="brand-name">CollabDen</span><span class="brand-tier">Studio Pro</span>
+          <table cellpadding="0" cellspacing="0" border="0" style="vertical-align: middle;">
+            <tr>
+              <td style="vertical-align: middle; padding-right: 10px;">
+                <img src="${logoUrl}" alt="CollabDen" class="brand-logo" width="36" height="36" style="vertical-align: middle; border-radius: 8px; object-fit: contain; width: 36px; height: 36px; display: block; border: 0;" />
+              </td>
+              <td style="vertical-align: middle;">
+                <span class="brand-name">CollabDen</span><span class="brand-tier">Studio Pro</span>
+              </td>
+            </tr>
+          </table>
         </div>
         <div class="header">
           <h1>${headerTitle}</h1>
@@ -243,12 +282,17 @@ const getCollabDenEmailTemplate = ({
 // Backward-compatible alias for existing template builders.
 const getBaseEmailLayout = getCollabDenEmailTemplate;
 
-const escapeHtml = (value) => String(value || "").replace(/[&<>"]/g, (character) => ({
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-}[character]));
+const escapeHtml = (value) =>
+  String(value || "").replace(
+    /[&<>"]/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+      })[character]
+  );
 
 /**
  * Branded template for notification emails that need a single call to action.
@@ -428,7 +472,12 @@ const getWalletFundedEmailTemplate = ({ amount, newBalance, reference }) => {
   };
 };
 
-const getWithdrawalInitiatedEmailTemplate = ({ amount, bankName, accountNumber, reference }) => {
+const getWithdrawalInitiatedEmailTemplate = ({
+  amount,
+  bankName,
+  accountNumber,
+  reference,
+}) => {
   const formattedAmount = Number(amount).toLocaleString();
   const maskedAccount = `****${accountNumber.slice(-4)}`;
   const date = new Date().toLocaleDateString("en-NG", {
@@ -564,7 +613,8 @@ const getWithdrawalCompletedEmailTemplate = ({ amount, reference }) => {
 
 const getWithdrawalFailedEmailTemplate = ({ amount, reference, reason }) => {
   const formattedAmount = Number(amount).toLocaleString();
-  const failureReason = reason || "The payout could not be processed by the bank.";
+  const failureReason =
+    reason || "The payout could not be processed by the bank.";
   const date = new Date().toLocaleDateString("en-NG", {
     year: "numeric",
     month: "long",

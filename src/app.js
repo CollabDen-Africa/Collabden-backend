@@ -35,7 +35,9 @@ const adminVerificationRoutes = require("./modules/admin/routes/adminVerificatio
 const adminSubscriptionsRoutes = require("./modules/admin/routes/adminSubscriptions.route");
 const adminSupportTicketsRoutes = require("./modules/admin/routes/adminSupportTickets.route");
 const adminSettingsRoutes = require("./modules/admin/routes/adminSettings.route");
+const path = require("path");
 const app = express();
+app.use(express.static(path.join(__dirname, "../public")));
 const server = http.createServer(app);
 
 app.use(
