@@ -43,7 +43,8 @@ const respondRequest = async (req, res) => {
 const listConnections = async (req, res) => {
   try {
     const userId = req.user.id;
-    const connections = await getConnections(userId);
+    const { projectId, excludeProjectId } = req.query;
+    const connections = await getConnections(userId, { projectId, excludeProjectId });
     res.status(200).json(connections);
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -1,6 +1,7 @@
 const prisma = require('../../../config/prismaClient');
 const bcrypt = require("bcryptjs");
 const path = require("path");
+const sharp = require("sharp");
 const supabase = require("../../../config/supabase");
 const AVATAR_BUCKET = "user-avatars";
 
@@ -191,11 +192,9 @@ const changePassword = async (req, res) => {
     // Prevent reusing the same password
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      return res
-        .status(400)
-        .json({
-          error: "New password must be different from your current password",
-        });
+      return res.status(400).json({
+        error: "New password must be different from your current password",
+      });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -222,16 +221,14 @@ const changePassword = async (req, res) => {
 /**
  * Upload a profile picture to Supabase Storage and save the public URL.
  * Accepts: multipart/form-data with a single file field named 'avatar'.
- * Max size: 2MB. Allowed types: JPEG, PNG, WebP, GIF.
+ * Max size: 5MB upload limit. Automatically cropped and optimized to 500x500 WebP (~50-100KB).
  */
 const uploadAvatar = async (req, res) => {
   try {
     if (!req.file) {
-      return res
-        .status(400)
-        .json({
-          error: "No file uploaded. Include a file in the 'avatar' field.",
-        });
+      return res.status(400).json({
+        error: "No file uploaded. Include a file in the 'avatar' field.",
+      });
     }
 
     if (!supabase) {
@@ -241,13 +238,18 @@ const uploadAvatar = async (req, res) => {
     }
 
     const userId = req.user.id;
-    const ext = path.extname(req.file.originalname).toLowerCase() || ".jpg";
-    const storagePath = `${userId}/avatar_${Date.now()}${ext}`;
+
+    const optimizedBuffer = await sharp(req.file.buffer)
+      .resize(500, 500, { fit: "cover", position: "center" })
+      .webp({ quality: 80 })
+      .toBuffer();
+
+    const storagePath = `${userId}/avatar_${Date.now()}.webp`;
 
     let { error: uploadError } = await supabase.storage
       .from(AVATAR_BUCKET)
-      .upload(storagePath, req.file.buffer, {
-        contentType: req.file.mimetype,
+      .upload(storagePath, optimizedBuffer, {
+        contentType: "image/webp",
         upsert: true,
       });
 
@@ -261,8 +263,8 @@ const uploadAvatar = async (req, res) => {
       await supabase.storage.createBucket(AVATAR_BUCKET, { public: true });
       const retryResult = await supabase.storage
         .from(AVATAR_BUCKET)
-        .upload(storagePath, req.file.buffer, {
-          contentType: req.file.mimetype,
+        .upload(storagePath, optimizedBuffer, {
+          contentType: "image/webp",
           upsert: true,
         });
       uploadError = retryResult.error;
@@ -272,7 +274,9 @@ const uploadAvatar = async (req, res) => {
       console.error("Supabase upload error:", uploadError);
       return res
         .status(500)
-        .json({ error: `Supabase storage upload failed: ${uploadError.message}` });
+        .json({
+          error: `Supabase storage upload failed: ${uploadError.message}`,
+        });
     }
 
     const { data: publicUrlData } = supabase.storage
@@ -288,10 +292,15 @@ const uploadAvatar = async (req, res) => {
 
     res
       .status(200)
-      .json({ message: "Profile picture uploaded to Supabase storage successfully.", avatarUrl });
+      .json({
+        message: "Profile picture uploaded to Supabase storage successfully.",
+        avatarUrl,
+      });
   } catch (error) {
     console.error("Error uploading avatar to Supabase:", error);
-    res.status(500).json({ error: error.message || "Failed to upload profile picture." });
+    res
+      .status(500)
+      .json({ error: error.message || "Failed to upload profile picture." });
   }
 };
 

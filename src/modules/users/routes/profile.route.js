@@ -125,7 +125,7 @@ router.patch("/password", authMiddleware, validateRequest(changePasswordSchema),
  * /api/v1/user/profile/avatar/upload:
  *   post:
  *     summary: Upload a profile picture directly (multipart/form-data)
- *     description: Uploads the file to Supabase Storage and saves the public URL to the user's profile. Max 2MB. Allowed types JPEG, PNG, WebP, GIF.
+ *     description: Uploads the file to Supabase Storage and saves the public URL to the user's profile. Max 5MB upload limit. Automatically cropped and optimized to 500x500 WebP. Allowed types JPEG, PNG, WebP, GIF.
  *     tags: [Profile]
  *     security:
  *       - bearerAuth: []

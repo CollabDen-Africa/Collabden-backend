@@ -17,6 +17,7 @@ enum InviteStatus {
   PENDING
   ACCEPTED
   DECLINED
+  CANCELLED
 }
 
 model Project {

@@ -398,18 +398,41 @@ const getUniqueSkills = async () => {
   return Array.from(skillsSet).sort();
 };
 
-/**
- * Retrieve list of all unique genres currently present in user profiles.
- */
+
+const DEFAULT_GENRES = [
+  "Afrobeats",
+  "Amapiano",
+  "R&B",
+  "Electronic",
+  "Hip-Hop",
+  "Jazz",
+  "Folk",
+  "Ambient",
+  "Pop",
+  "Classical",
+  "Cinematic",
+  "Rock",
+  "Gospel",
+  "Reggae",
+  "Dancehall",
+  "Highlife",
+  "Country",
+  "Blues",
+  "Soul",
+  "Trap"
+];
+
 const getUniqueGenres = async () => {
   const profiles = await prisma.userProfile.findMany({
     select: { genres: true },
   });
 
-  const genresSet = new Set();
+  const genresSet = new Set(DEFAULT_GENRES);
   profiles.forEach(p => {
     if (p.genres) {
-      p.genres.forEach(g => genresSet.add(g.trim()));
+      p.genres.forEach(g => {
+        if (g && g.trim()) genresSet.add(g.trim());
+      });
     }
   });
 
