@@ -1,0 +1,1 @@
+-- 0_init baseline migration (already applied)

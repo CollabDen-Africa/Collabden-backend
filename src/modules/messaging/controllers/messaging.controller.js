@@ -153,7 +153,25 @@ const deleteChatHandler = async (req, res) => {
   }
 };
 
+
+const postCreateChat = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { recipientId } = req.body;
+
+    if (!recipientId) {
+      return res.status(400).json({ error: "recipientId is required." });
+    }
+
+    const chat = await messagingService.getOrCreateDirectChat(userId, recipientId);
+    res.status(201).json(chat);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 module.exports = {
+  postCreateChat,
   postMessageRequest,
   patchMessageRequest,
   getMessageRequests,

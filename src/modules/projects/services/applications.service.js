@@ -22,7 +22,7 @@ const applyToProjectService = async (projectId, applicantId, message) => {
     throw new Error("You cannot apply to your own project.");
   }
 
-  // Check if already a collaborator
+  // Check if already an active collaborator
   const collaborator = await prisma.projectCollaborator.findFirst({
     where: { projectId, userId: applicantId, isActive: true },
   });
@@ -36,18 +36,31 @@ const applyToProjectService = async (projectId, applicantId, message) => {
       projectId_applicantId: { projectId, applicantId },
     },
   });
-  if (existingApp) {
-    throw new Error("You have already applied to this project.");
-  }
 
-  const application = await prisma.projectApplication.create({
-    data: {
-      projectId,
-      applicantId,
-      message,
-      status: "APPLIED",
-    },
-  });
+  let application;
+  if (existingApp) {
+    if (existingApp.status === "CANCELLED") {
+      // Re-apply on previously cancelled application
+      application = await prisma.projectApplication.update({
+        where: { id: existingApp.id },
+        data: {
+          message,
+          status: "APPLIED",
+        },
+      });
+    } else {
+      throw new Error("You have already applied to this project.");
+    }
+  } else {
+    application = await prisma.projectApplication.create({
+      data: {
+        projectId,
+        applicantId,
+        message,
+        status: "APPLIED",
+      },
+    });
+  }
 
   // Get applicant name for notification
   const applicant = await prisma.userProfile.findUnique({
@@ -95,15 +108,27 @@ const getProjectApplicationsService = async (projectId, ownerId) => {
           firstName: true,
           lastName: true,
           avatarUrl: true,
+          bio: true,
+          location: true,
+          yearsOfExperience: true,
+          role: true,
           skills: true,
           genres: true,
+          portfolioLinks: true,
+          socialLinks: true,
+          creativePhilosophy: true,
+          experience: true,
         },
       },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return applications;
+  return applications.map((app) => ({
+    ...app,
+    pitch: app.message,
+    portfolioLink: app.applicant?.portfolioLinks?.[0] || null,
+  }));
 };
 
 /**
@@ -159,6 +184,16 @@ const getApplicationDetailsService = async (applicationId, userId) => {
           firstName: true,
           lastName: true,
           avatarUrl: true,
+          bio: true,
+          location: true,
+          yearsOfExperience: true,
+          role: true,
+          skills: true,
+          genres: true,
+          portfolioLinks: true,
+          socialLinks: true,
+          creativePhilosophy: true,
+          experience: true,
         },
       },
     },
@@ -172,7 +207,11 @@ const getApplicationDetailsService = async (applicationId, userId) => {
     throw new Error("Access denied. You must be the applicant or project owner.");
   }
 
-  return application;
+  return {
+    ...application,
+    pitch: application.message,
+    portfolioLink: application.applicant?.portfolioLinks?.[0] || null,
+  };
 };
 
 /**
@@ -229,9 +268,9 @@ const getApplicationMessagesService = async (applicationId, userId) => {
 };
 
 /**
- * Review/Update project application status (Accept / Reject)
+ * Review/Update project application status (Accept / Reject / Decline / Cancel)
  */
-const reviewApplicationService = async (applicationId, ownerId, status) => {
+const reviewApplicationService = async (applicationId, ownerId, status, targetProjectId = null) => {
   const application = await prisma.projectApplication.findUnique({
     where: { id: applicationId },
     include: {
@@ -249,6 +288,23 @@ const reviewApplicationService = async (applicationId, ownerId, status) => {
     throw new Error("Application not found.");
   }
 
+  if (targetProjectId && application.projectId !== targetProjectId) {
+    throw new Error("Application does not belong to this project.");
+  }
+
+  let normalizedStatus = status ? String(status).toUpperCase() : "";
+  if (normalizedStatus === "ACCEPT") normalizedStatus = "ACCEPTED";
+  if (normalizedStatus === "DECLINE" || normalizedStatus === "DECLINED" || normalizedStatus === "REJECT") normalizedStatus = "REJECTED";
+  if (normalizedStatus === "CANCEL" || normalizedStatus === "CANCELED") normalizedStatus = "CANCELLED";
+
+  if (!["ACCEPTED", "REJECTED", "CANCELLED"].includes(normalizedStatus)) {
+    throw new Error("Invalid status. Must be ACCEPTED, REJECTED, or CANCELLED.");
+  }
+
+  if (normalizedStatus === "CANCELLED") {
+    return cancelApplicationService(applicationId, ownerId, targetProjectId);
+  }
+
   if (application.project.ownerId !== ownerId) {
     throw new Error("Access denied. Only the project owner can review applications.");
   }
@@ -257,17 +313,29 @@ const reviewApplicationService = async (applicationId, ownerId, status) => {
     throw new Error(`Application has already been ${application.status.toLowerCase()}.`);
   }
 
-  if (!["ACCEPTED", "REJECTED"].includes(status)) {
-    throw new Error("Invalid status. Must be ACCEPTED or REJECTED.");
-  }
-
   const updatedApplication = await prisma.projectApplication.update({
     where: { id: applicationId },
-    data: { status },
+    data: { status: normalizedStatus },
+    include: {
+      applicant: {
+        select: {
+          id: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          skills: true,
+          genres: true,
+          portfolioLinks: true,
+        },
+      },
+    },
   });
 
   // If accepted, add applicant to project collaborators
-  if (status === "ACCEPTED") {
+  if (normalizedStatus === "ACCEPTED") {
     const existingCollaborator = await prisma.projectCollaborator.findFirst({
       where: { projectId: application.projectId, userId: application.applicantId },
     });
@@ -275,7 +343,7 @@ const reviewApplicationService = async (applicationId, ownerId, status) => {
     if (existingCollaborator) {
       await prisma.projectCollaborator.update({
         where: { id: existingCollaborator.id },
-        data: { isActive: true },
+        data: { isActive: true, inviteStatus: "ACCEPTED" },
       });
     } else {
       await prisma.projectCollaborator.create({
@@ -284,6 +352,7 @@ const reviewApplicationService = async (applicationId, ownerId, status) => {
           userId: application.applicantId,
           role: "COLLABORATOR",
           isActive: true,
+          inviteStatus: "ACCEPTED",
         },
       });
     }
@@ -297,11 +366,101 @@ const reviewApplicationService = async (applicationId, ownerId, status) => {
       projectId: application.projectId,
       projectName: application.project.name,
       applicantId: application.applicantId,
-      status,
+      status: normalizedStatus,
     })
   );
 
-  return updatedApplication;
+  return {
+    ...updatedApplication,
+    pitch: updatedApplication.message,
+    portfolioLink: updatedApplication.applicant?.portfolioLinks?.[0] || null,
+  };
+};
+
+/**
+ * Cancel a project application (Applicant or Project Owner)
+ */
+const cancelApplicationService = async (applicationId, userId, targetProjectId = null) => {
+  const application = await prisma.projectApplication.findUnique({
+    where: { id: applicationId },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          ownerId: true,
+        },
+      },
+    },
+  });
+
+  if (!application) {
+    throw new Error("Application not found.");
+  }
+
+  if (targetProjectId && application.projectId !== targetProjectId) {
+    throw new Error("Application does not belong to this project.");
+  }
+
+  if (application.applicantId !== userId && application.project.ownerId !== userId) {
+    throw new Error("Access denied. Only the applicant or project owner can cancel this application.");
+  }
+
+  if (application.status === "CANCELLED") {
+    throw new Error("Application has already been cancelled.");
+  }
+
+  const updatedApplication = await prisma.projectApplication.update({
+    where: { id: applicationId },
+    data: { status: "CANCELLED" },
+    include: {
+      applicant: {
+        select: {
+          id: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          skills: true,
+          genres: true,
+          portfolioLinks: true,
+        },
+      },
+    },
+  });
+
+  // If application was previously accepted, deactivate collaborator
+  if (application.status === "ACCEPTED") {
+    const existingCollaborator = await prisma.projectCollaborator.findFirst({
+      where: { projectId: application.projectId, userId: application.applicantId },
+    });
+    if (existingCollaborator) {
+      await prisma.projectCollaborator.update({
+        where: { id: existingCollaborator.id },
+        data: { isActive: false, inviteStatus: "CANCELLED" },
+      });
+    }
+  }
+
+  // Publish event for status change notification
+  await publisherClient.publish(
+    EVENT_TYPES.PROJECT_APPLICATION_STATUS_CHANGED,
+    JSON.stringify({
+      applicationId,
+      projectId: application.projectId,
+      projectName: application.project.name,
+      applicantId: application.applicantId,
+      status: "CANCELLED",
+    })
+  );
+
+  return {
+    ...updatedApplication,
+    pitch: updatedApplication.message,
+    portfolioLink: updatedApplication.applicant?.portfolioLinks?.[0] || null,
+  };
 };
 
 module.exports = {
@@ -312,4 +471,5 @@ module.exports = {
   sendApplicationMessageService,
   getApplicationMessagesService,
   reviewApplicationService,
+  cancelApplicationService,
 };

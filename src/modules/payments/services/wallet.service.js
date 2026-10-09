@@ -199,7 +199,7 @@ const debitWallet = async (userId, amount, type, reference, description = null, 
  * @param {string} paymentMethod - Payment method (card, banktransfer, ussd)
  * @returns {object} { paymentLink, txRef }
  */
-const initializeFunding = async (userId, amount, paymentMethod) => {
+const initializeFunding = async (userId, amount, paymentMethod, redirectUrl) => {
   // 1. Get user email
   const user = await prisma.userProfile.findUnique({
     where: { id: userId },
@@ -216,6 +216,7 @@ const initializeFunding = async (userId, amount, paymentMethod) => {
     amount,
     email: user.email,
     paymentMethod,
+    redirectUrl,
   });
 
   // 3. Create payment record

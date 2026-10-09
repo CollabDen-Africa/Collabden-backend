@@ -2,6 +2,7 @@ enum ApplicationStatus {
   APPLIED
   ACCEPTED
   REJECTED
+  CANCELLED
 }
 
 model ProjectApplication {

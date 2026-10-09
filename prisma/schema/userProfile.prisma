@@ -63,6 +63,7 @@ model UserProfile {
   updatedAt               DateTime              @updatedAt
   ownedProjects           Project[]             @relation("ProjectOwner")
   collaborations          ProjectCollaborator[]
+  royaltySplits           ProjectRoyaltySplit[]
 
   // Connections
   sentRequests     UserConnection[] @relation("RequestSender")
