@@ -12,6 +12,7 @@ const {
   postMessageReaction,
   patchChatArchive,
   deleteChatHandler,
+  postCreateChat,
 } = require("../controllers/messaging.controller");
 
 router.use(authMiddleware);
@@ -267,6 +268,7 @@ router.get("/requests", getMessageRequests);
  *         description: Unauthorized
  */
 router.get("/chats", getChats);
+router.post("/chats", postCreateChat);
 
 /**
  * @swagger

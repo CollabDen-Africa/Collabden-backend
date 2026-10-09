@@ -16,12 +16,37 @@ const {
   getMarketplaceProjectsService,
   getMarketplaceProjectSummaryService,
   reportProjectService,
+  uploadProjectCoverService,
 } = require("../services/projects.service");
+const {
+  getProjectRoyaltySplits,
+  updateProjectRoyaltySplits,
+} = require("../services/royalty.service");
 const { PROJECT_VISIBILITY } = require("../../../utils/constants");
+
+const parseArray = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return val.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+};
+
+const parseBoolean = (val) => {
+  if (typeof val === "boolean") return val;
+  if (typeof val === "string") return val.toLowerCase() === "true";
+  return false;
+};
 
 const createProject = async (req, res) => {
   try {
-    const { name, description, genre, startDate, endDate, visibility, collaboratorIds, openToCollaborators, requiredRoles, requiredSkills, budget, pricingType } = req.body;
+    const { name, description, genre, startDate, endDate, visibility, coverImageUrl, budget, pricingType } = req.body;
     const userId = req.user.id;
 
     if (!name || !genre || !startDate) {
@@ -31,6 +56,12 @@ const createProject = async (req, res) => {
     if (visibility && !Object.values(PROJECT_VISIBILITY).includes(visibility)) {
       return res.status(400).json({ error: `Invalid visibility value. Must be one of: ${Object.values(PROJECT_VISIBILITY).join(", ")}` });
     }
+
+    const openToCollaborators = req.body.openToCollaborators !== undefined ? parseBoolean(req.body.openToCollaborators) : false;
+    const collaboratorIds = parseArray(req.body.collaboratorIds);
+    const requiredRoles = parseArray(req.body.requiredRoles);
+    const requiredSkills = parseArray(req.body.requiredSkills);
+    const coverImageFile = req.file;
 
     const project = await createProjectService({
       userId,
@@ -46,6 +77,8 @@ const createProject = async (req, res) => {
       requiredSkills,
       budget,
       pricingType,
+      coverImageUrl,
+      coverImageFile,
     });
 
     res.status(201).json({
@@ -173,17 +206,28 @@ const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { name, description, genre, startDate, visibility, openToCollaborators, requiredRoles, requiredSkills } = req.body;
+    const { name, description, genre, startDate, endDate, visibility, coverImageUrl, budget, pricingType } = req.body;
+
+    const openToCollaborators = req.body.openToCollaborators !== undefined ? parseBoolean(req.body.openToCollaborators) : undefined;
+    const collaboratorIds = req.body.collaboratorIds !== undefined ? parseArray(req.body.collaboratorIds) : undefined;
+    const requiredRoles = req.body.requiredRoles !== undefined ? parseArray(req.body.requiredRoles) : undefined;
+    const requiredSkills = req.body.requiredSkills !== undefined ? parseArray(req.body.requiredSkills) : undefined;
+    const coverImageFile = req.file;
 
     const project = await updateProjectService(id, userId, {
       name,
       description,
       genre,
       startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate !== undefined ? (endDate ? new Date(endDate) : null) : undefined,
       visibility,
       openToCollaborators,
       requiredRoles,
       requiredSkills,
+      budget,
+      pricingType,
+      coverImageUrl,
+      coverImageFile,
     });
 
     res.status(200).json({
@@ -192,6 +236,23 @@ const updateProject = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+const uploadProjectCover = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file uploaded. Include a file in the 'coverImage' field." });
+    }
+
+    const result = await uploadProjectCoverService(req.params.id, req.user.id, req.file);
+    res.status(200).json({
+      message: "Project cover image uploaded successfully",
+      coverImageUrl: result.coverImageUrl,
+      project: result.project,
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
   }
 };
 
@@ -309,6 +370,29 @@ const getMyInvites = async (req, res) => {
   }
 };
 
+const getRoyaltySplits = async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const userId = req.user.id;
+    const result = await getProjectRoyaltySplits(projectId, userId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const updateRoyaltySplits = async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const ownerId = req.user.id;
+    const { splits } = req.body;
+    const result = await updateProjectRoyaltySplits(projectId, ownerId, splits);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createProject,
   uploadProjectFile,
@@ -327,4 +411,7 @@ module.exports = {
   getMarketplace,
   getMarketplaceSummary,
   reportProject,
+  uploadProjectCover,
+  getRoyaltySplits,
+  updateRoyaltySplits,
 };

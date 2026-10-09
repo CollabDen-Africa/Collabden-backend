@@ -6,6 +6,7 @@ const {
   sendApplicationMessageService,
   getApplicationMessagesService,
   reviewApplicationService,
+  cancelApplicationService,
 } = require("../services/applications.service");
 
 const applyToProject = async (req, res) => {
@@ -26,7 +27,7 @@ const applyToProject = async (req, res) => {
 
 const getProjectApplications = async (req, res) => {
   try {
-    const { id: projectId } = req.params;
+    const projectId = req.params.projectId || req.params.id;
     const ownerId = req.user.id;
 
     const applications = await getProjectApplicationsService(projectId, ownerId);
@@ -91,16 +92,38 @@ const getApplicationMessages = async (req, res) => {
 const reviewApplication = async (req, res) => {
   try {
     const { applicationId } = req.params;
+    const projectId = req.params.projectId || req.params.id;
     const ownerId = req.user.id;
     const { status } = req.body;
 
-    if (!status || !["ACCEPTED", "REJECTED"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status. Must be ACCEPTED or REJECTED." });
+    let normalizedStatus = status ? String(status).toUpperCase() : "";
+    if (normalizedStatus === "ACCEPT") normalizedStatus = "ACCEPTED";
+    if (normalizedStatus === "DECLINE" || normalizedStatus === "DECLINED" || normalizedStatus === "REJECT") normalizedStatus = "REJECTED";
+    if (normalizedStatus === "CANCEL" || normalizedStatus === "CANCELED") normalizedStatus = "CANCELLED";
+
+    if (!normalizedStatus || !["ACCEPTED", "REJECTED", "CANCELLED"].includes(normalizedStatus)) {
+      return res.status(400).json({ error: "Invalid status. Must be ACCEPTED, DECLINED, or CANCELLED." });
     }
 
-    const application = await reviewApplicationService(applicationId, ownerId, status);
+    const application = await reviewApplicationService(applicationId, ownerId, status, projectId);
     res.status(200).json({
-      message: `Application has been successfully ${status.toLowerCase()}.`,
+      message: `Application has been successfully ${normalizedStatus.toLowerCase()}.`,
+      application,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const cancelApplication = async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const projectId = req.params.projectId || req.params.id;
+    const userId = req.user.id;
+
+    const application = await cancelApplicationService(applicationId, userId, projectId);
+    res.status(200).json({
+      message: "Application has been successfully cancelled.",
       application,
     });
   } catch (error) {
@@ -116,4 +139,5 @@ module.exports = {
   sendApplicationMessage,
   getApplicationMessages,
   reviewApplication,
+  cancelApplication,
 };

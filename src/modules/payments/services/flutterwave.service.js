@@ -39,9 +39,21 @@ const generateTxRef = (type = "TXN") => {
  * @param {string} params.paymentMethod - Payment method (card, banktransfer, ussd)
  * @returns {object} { paymentLink, txRef } - Flutterwave payment link and transaction reference
  */
-const initializePayment = async ({ userId, amount, email, paymentMethod }) => {
+const initializePayment = async ({ userId, amount, email, paymentMethod, redirectUrl }) => {
   const txRef = generateTxRef("FUND");
-  const redirectUrl = process.env.FLW_REDIRECT_URL;
+  
+  const frontendBaseUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+  const defaultRedirect = frontendBaseUrl ? `${frontendBaseUrl}/workspace/payment` : null;
+  const finalRedirectUrl = redirectUrl || process.env.FLW_REDIRECT_URL || defaultRedirect;
+
+  if (!finalRedirectUrl) {
+    console.error(
+      "[Payment Configuration Error] Missing FRONTEND_URL or FLW_REDIRECT_URL in backend environment settings."
+    );
+    throw new Error(
+      "Payment checkout could not be initialized at this time. Please try again later or contact support."
+    );
+  }
 
   const flwClient = getFlwClient();
 
@@ -49,7 +61,7 @@ const initializePayment = async ({ userId, amount, email, paymentMethod }) => {
     tx_ref: txRef,
     amount,
     currency: "NGN",
-    redirect_url: redirectUrl,
+    redirect_url: finalRedirectUrl,
     payment_options: paymentMethod,
     customer: {
       email,

@@ -32,8 +32,8 @@ const getTransactions = async (req, res) => {
 
 const initializeFunding = async (req, res) => {
   try {
-    const { amount, paymentMethod } = req.body;
-    const result = await walletService.initializeFunding(req.user.id, amount, paymentMethod);
+    const { amount, paymentMethod, redirectUrl } = req.body;
+    const result = await walletService.initializeFunding(req.user.id, amount, paymentMethod, redirectUrl);
     res.status(200).json(result);
   } catch (error) {
     res.status(400).json({ error: error.message });

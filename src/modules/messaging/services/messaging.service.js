@@ -519,7 +519,116 @@ const deleteChat = async (userId, chatId) => {
   });
 };
 
+
+/**
+ * Create or fetch a direct chat session between connected users.
+ */
+const getOrCreateDirectChat = async (userId, recipientId) => {
+  if (!recipientId) {
+    throw new Error("recipientId is required.");
+  }
+
+  if (userId === recipientId) {
+    throw new Error("Cannot create a chat with yourself.");
+  }
+
+  const recipient = await prisma.userProfile.findUnique({
+    where: { id: recipientId },
+    select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true },
+  });
+
+  if (!recipient) {
+    throw new Error("Recipient user not found.");
+  }
+
+  const areConnected = await prisma.userConnection.findFirst({
+    where: {
+      OR: [
+        { senderId: userId, receiverId: recipientId, status: "ACCEPTED" },
+        { senderId: recipientId, receiverId: userId, status: "ACCEPTED" },
+      ],
+    },
+  });
+
+  const hasAcceptedRequest = await prisma.messageRequest.findFirst({
+    where: {
+      OR: [
+        { senderId: userId, receiverId: recipientId, status: "ACCEPTED" },
+        { senderId: recipientId, receiverId: userId, status: "ACCEPTED" },
+      ],
+    },
+  });
+
+  const sharedProject = await prisma.projectCollaborator.findFirst({
+    where: {
+      userId: userId,
+      project: {
+        OR: [
+          { ownerId: recipientId },
+          { collaborators: { some: { userId: recipientId } } },
+        ],
+      },
+    },
+  });
+
+  if (!areConnected && !hasAcceptedRequest && !sharedProject) {
+    throw new Error("You must be connected with this user to start a direct chat.");
+  }
+
+  const [user1Id, user2Id] = [userId, recipientId].sort();
+
+  let chat = await prisma.directChat.findUnique({
+    where: {
+      user1Id_user2Id: { user1Id, user2Id },
+    },
+    include: {
+      user1: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+      user2: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+    },
+  });
+
+  if (!chat) {
+    chat = await prisma.directChat.create({
+      data: {
+        user1Id,
+        user2Id,
+      },
+      include: {
+        user1: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+        user2: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+      },
+    });
+  } else {
+    const updateData = {};
+    if (chat.user1Id === userId && chat.isDeletedByUser1) updateData.isDeletedByUser1 = false;
+    if (chat.user2Id === userId && chat.isDeletedByUser2) updateData.isDeletedByUser2 = false;
+    if (Object.keys(updateData).length > 0) {
+      chat = await prisma.directChat.update({
+        where: { id: chat.id },
+        data: updateData,
+        include: {
+          user1: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+          user2: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+        },
+      });
+    }
+  }
+
+  const isUser1 = chat.user1Id === userId;
+  const otherParticipant = isUser1 ? chat.user2 : chat.user1;
+
+  return {
+    id: chat.id,
+    user1Id: chat.user1Id,
+    user2Id: chat.user2Id,
+    otherParticipant,
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+  };
+};
+
 module.exports = {
+  getOrCreateDirectChat,
   sendMessageRequest,
   respondToMessageRequest,
   listMessageRequests,
