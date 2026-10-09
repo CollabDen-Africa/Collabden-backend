@@ -1,5 +1,6 @@
 const prisma = require("../../../config/prismaClient");
 const supabase = require("../../../config/supabase");
+const sharp = require("sharp");
 const { publishEvent } = require("../../../events/publisher");
 const EVENT_TYPES = require("../../../events/eventTypes");
 const {
@@ -37,6 +38,87 @@ const ALLOWED_PROJECT_FILE_TYPES = new Set([
   "audio/x-midi",
   "application/pdf",
 ]);
+
+const uploadProjectCoverFile = async (file, identifier = "temp") => {
+  if (!supabase) {
+    throw new Error("File storage is not configured.");
+  }
+
+  if (!file.mimetype.startsWith("image/")) {
+    const error = new Error("Invalid file type. Only image files are allowed for project cover.");
+    error.status = 400;
+    throw error;
+  }
+
+  const optimizedBuffer = await sharp(file.buffer)
+    .resize(1200, 630, { fit: "cover", position: "center" })
+    .webp({ quality: 80 })
+    .toBuffer();
+
+  const storagePath = `covers/${identifier}_${Date.now()}.webp`;
+
+  let { error: uploadError } = await supabase.storage
+    .from(PROJECT_FILES_BUCKET)
+    .upload(storagePath, optimizedBuffer, {
+      contentType: "image/webp",
+      upsert: true,
+    });
+
+  if (
+    uploadError &&
+    (uploadError.statusCode === "404" ||
+      uploadError.error === "Bucket not found" ||
+      uploadError.message?.toLowerCase().includes("not found"))
+  ) {
+    await supabase.storage.createBucket(PROJECT_FILES_BUCKET, { public: true });
+    const retryResult = await supabase.storage
+      .from(PROJECT_FILES_BUCKET)
+      .upload(storagePath, optimizedBuffer, {
+        contentType: "image/webp",
+        upsert: true,
+      });
+    uploadError = retryResult.error;
+  }
+
+  if (uploadError) {
+    console.error("Supabase cover upload error:", uploadError);
+    const error = new Error(`Cover image upload failed: ${uploadError.message}`);
+    error.status = 502;
+    throw error;
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from(PROJECT_FILES_BUCKET)
+    .getPublicUrl(storagePath);
+
+  return publicUrlData.publicUrl;
+};
+
+const uploadProjectCoverService = async (projectId, userId, file) => {
+  const project = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      isDeleted: false,
+      ownerId: userId,
+    },
+    select: { id: true },
+  });
+
+  if (!project) {
+    const error = new Error("Project not found or you do not have permission to update this project.");
+    error.status = 404;
+    throw error;
+  }
+
+  const coverImageUrl = await uploadProjectCoverFile(file, projectId);
+
+  const updatedProject = await prisma.project.update({
+    where: { id: projectId },
+    data: { coverImageUrl },
+  });
+
+  return { coverImageUrl, project: updatedProject };
+};
 
 const uploadProjectFileService = async (projectId, userId, file) => {
   if (!supabase) {
@@ -250,6 +332,8 @@ const createProjectService = async ({
   requiredSkills = [],
   budget,
   pricingType,
+  coverImageUrl,
+  coverImageFile,
 }) => {
   // Fetch user profile for tier check
   const user = await prisma.userProfile.findUnique({
@@ -392,11 +476,20 @@ const createProjectService = async ({
     }
   }
 
+  let finalCoverImageUrl = coverImageUrl || null;
+  if (coverImageFile) {
+    finalCoverImageUrl = await uploadProjectCoverFile(coverImageFile, userId);
+  }
+
   const projectData = {
     name,
     description,
     genre,
     startDate: new Date(startDate),
+    endDate: endDate ? new Date(endDate) : null,
+    coverImageUrl: finalCoverImageUrl,
+    budget: budget !== undefined && budget !== null && budget !== "" ? Number(budget) : null,
+    pricingType: pricingType || null,
     visibility,
     ownerId: userId,
     openToCollaborators,
@@ -978,12 +1071,26 @@ const updateProjectService = async (projectId, userId, updateData) => {
     };
   }
 
+  if (updateData.coverImageFile) {
+    updateData.coverImageUrl = await uploadProjectCoverFile(updateData.coverImageFile, projectId);
+    delete updateData.coverImageFile;
+  }
+
   const updatedProject = await prisma.project.update({
     where: { id: projectId },
     data: {
       ...updateData,
       startDate: updateData.startDate
         ? new Date(updateData.startDate)
+        : undefined,
+      endDate: updateData.endDate !== undefined
+        ? (updateData.endDate ? new Date(updateData.endDate) : null)
+        : undefined,
+      budget: updateData.budget !== undefined
+        ? (updateData.budget !== null && updateData.budget !== "" ? Number(updateData.budget) : null)
+        : undefined,
+      pricingType: updateData.pricingType !== undefined
+        ? (updateData.pricingType || null)
         : undefined,
     },
   });
@@ -1238,7 +1345,6 @@ const getMarketplaceProjectsService = async (userId, filters = {}) => {
     isDeleted: false,
     visibility: "PUBLIC",
     openToCollaborators: true,
-    ownerId: { not: userId },
     AND: [],
   };
 
@@ -1301,6 +1407,12 @@ const getMarketplaceProjectsService = async (userId, filters = {}) => {
           email: true,
           avatarUrl: true,
           tier: true,
+        },
+      },
+      collaborators: {
+        select: {
+          userId: true,
+          role: true,
         },
       },
       _count: {
@@ -1400,4 +1512,5 @@ module.exports = {
   getMarketplaceProjectsService,
   getMarketplaceProjectSummaryService,
   reportProjectService,
+  uploadProjectCoverService,
 };

@@ -38,6 +38,7 @@ model Escrow {
   releasedAmount   Decimal            @default(0) @db.Decimal(12, 2)
   status           EscrowStatus       @default(PENDING_FUNDING)
   reviewPeriodDays Int                @default(7)
+  fundingDeadline  DateTime?
   fundingReference String?            @unique
   project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   agreement        LegalAgreement     @relation(fields: [agreementId], references: [id])

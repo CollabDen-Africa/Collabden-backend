@@ -18,6 +18,9 @@ const {
   getMarketplace,
   getMarketplaceSummary,
   reportProject,
+  uploadProjectCover,
+  getRoyaltySplits,
+  updateRoyaltySplits,
 } = require("../controllers/projects.controller");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const {
@@ -28,12 +31,25 @@ const {
   sendApplicationMessage,
   getApplicationMessages,
   reviewApplication,
+  cancelApplication,
 } = require("../controllers/applications.controller");
 
 const router = Router();
 const projectFileUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
+});
+
+const coverImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed for project cover images."), false);
+    }
+  },
 });
 
 router.use(authMiddleware);
@@ -66,16 +82,54 @@ router.use(authMiddleware);
  *               startDate:
  *                 type: string
  *                 format: date-time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *               coverImageUrl:
+ *                 type: string
  *               visibility:
  *                 type: string
  *                 enum: [PUBLIC, PRIVATE]
+ *               openToCollaborators:
+ *                 type: boolean
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - genre
+ *               - startDate
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               genre:
+ *                 type: string
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *               coverImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Cover image file (JPEG, PNG, WebP)
+ *               coverImageUrl:
+ *                 type: string
+ *               visibility:
+ *                 type: string
+ *                 enum: [PUBLIC, PRIVATE]
+ *               openToCollaborators:
+ *                 type: boolean
  *     responses:
  *       201:
  *         description: Project created successfully
  *       400:
  *         description: Missing required fields
  */
-router.post("/", createProject);
+router.post("/", coverImageUpload.single("coverImage"), createProject);
 
 /**
  * @swagger
@@ -570,7 +624,110 @@ router.post("/:id/apply", applyToProject);
  *       200:
  *         description: List of applications fetched successfully
  */
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/applications:
+ *   get:
+ *     summary: List all applications for a specific project (Project Owner only)
+ *     description: Returns applicant's profile data (display name, avatar, bio, location, skills, genres, portfolio links), application pitch, and application status so the owner can review them.
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     responses:
+ *       200:
+ *         description: List of applications fetched successfully
+ *       403:
+ *         description: Access denied (only project owner)
+ *       404:
+ *         description: Project not found
+ */
+router.get("/:projectId/applications", getProjectApplications);
 router.get("/:id/applications", getProjectApplications);
+
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/applications/{applicationId}/status:
+ *   patch:
+ *     summary: Update application status (Accept / Decline)
+ *     description: Accept or decline a project application. Accepting automatically adds the applicant as an active collaborator on the project workspace.
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [ACCEPTED, DECLINED, REJECTED]
+ *                 example: ACCEPTED
+ *     responses:
+ *       200:
+ *         description: Application status updated successfully and collaborator added if accepted
+ *       400:
+ *         description: Invalid status or application already processed
+ *       403:
+ *         description: Access denied (only project owner)
+ *       404:
+ *         description: Application or project not found
+ */
+router.patch("/:projectId/applications/:applicationId/status", reviewApplication);
+router.patch("/:id/applications/:applicationId/status", reviewApplication);
+
+/**
+ * @swagger
+ * /api/v1/projects/applications/{applicationId}/cancel:
+ *   post:
+ *     summary: Cancel a submitted project application
+ *     description: Cancels an existing application. Can be invoked by the applicant or the project owner. If the application was previously accepted, the applicant is deactivated as a project collaborator.
+ *     tags: [Project Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Application ID
+ *     responses:
+ *       200:
+ *         description: Application cancelled successfully
+ *       400:
+ *         description: Application already cancelled
+ *       403:
+ *         description: Access denied (only applicant or owner can cancel)
+ *       404:
+ *         description: Application not found
+ */
+router.post("/applications/:applicationId/cancel", cancelApplication);
+router.post("/:projectId/applications/:applicationId/cancel", cancelApplication);
+router.patch("/:projectId/applications/:applicationId/cancel", cancelApplication);
 
 /**
  * @swagger
@@ -695,6 +852,36 @@ router.post("/:id/invitations/respond", respondToInvite);
  *               startDate:
  *                 type: string
  *                 format: date-time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *               coverImageUrl:
+ *                 type: string
+ *               visibility:
+ *                 type: string
+ *                 enum: [PUBLIC, PRIVATE]
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               genre:
+ *                 type: string
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *               coverImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Cover image file (JPEG, PNG, WebP)
+ *               coverImageUrl:
+ *                 type: string
  *               visibility:
  *                 type: string
  *                 enum: [PUBLIC, PRIVATE]
@@ -706,7 +893,45 @@ router.post("/:id/invitations/respond", respondToInvite);
  *       404:
  *         description: Project not found
  */
-router.put("/:id", updateProject);
+router.put("/:id", coverImageUpload.single("coverImage"), updateProject);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/cover:
+ *   post:
+ *     summary: Upload a project cover image (multipart/form-data)
+ *     description: Uploads and optimizes a cover image for the project workspace and marketplace card.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - coverImage
+ *             properties:
+ *               coverImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Project cover image file (JPEG, PNG, WebP)
+ *     responses:
+ *       200:
+ *         description: Project cover image uploaded successfully
+ *       400:
+ *         description: No image file uploaded or invalid image format
+ *       404:
+ *         description: Project not found or insufficient permissions
+ */
+router.post("/:id/cover", coverImageUpload.single("coverImage"), uploadProjectCover);
 
 /**
  * @swagger
@@ -729,6 +954,74 @@ router.put("/:id", updateProject);
  *         description: Only the owner can delete the project
  */
 router.delete("/:id", deleteProject);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/royalties:
+ *   get:
+ *     summary: Get project royalty splits
+ *     description: Returns the configured master royalty share allocations for project collaborators.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Royalty splits retrieved successfully
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Project not found
+ *   put:
+ *     summary: Update project royalty splits
+ *     description: Configures per-collaborator master royalty percentages. Only the project owner can update splits. Total splits cannot exceed 100%.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - splits
+ *             properties:
+ *               splits:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - userId
+ *                     - royaltyShare
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     royaltyShare:
+ *                       type: number
+ *                     role:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: Royalty splits updated successfully
+ *       400:
+ *         description: Total percentage exceeds 100% or invalid payload
+ *       403:
+ *         description: Only the project owner can update royalty splits
+ */
+router.get("/:id/royalties", getRoyaltySplits);
+router.put("/:id/royalties", updateRoyaltySplits);
 
 /**
  * @swagger
