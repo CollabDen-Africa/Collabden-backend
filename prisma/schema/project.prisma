@@ -6,6 +6,7 @@ enum ProjectVisibility {
 enum ProjectStatus {
   ACTIVE
   COMPLETED
+  INACTIVE
 }
 
 enum CollaboratorRole {

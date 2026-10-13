@@ -952,6 +952,8 @@ router.post("/:id/cover", coverImageUpload.single("coverImage"), uploadProjectCo
  *         description: Project deleted successfully
  *       403:
  *         description: Only the owner can delete the project
+ *       404:
+ *         description: Project not found
  */
 router.delete("/:id", deleteProject);
 

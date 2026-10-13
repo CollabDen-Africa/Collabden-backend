@@ -161,9 +161,9 @@ const updateProjectTaskStatus = async (req, res) => {
 const getProjects = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { visibility, page, limit, status, search, genre, sortBy, sortOrder } = req.query;
+    const { visibility, page, limit, status, search, genre, sortBy, sortOrder, hasMessages } = req.query;
     const data = await getProjectListService(userId, { 
-      visibility, page, limit, status, search, genre, sortBy, sortOrder 
+      visibility, page, limit, status, search, genre, sortBy, sortOrder, hasMessages 
     });
     res.status(200).json(data);
   } catch (error) {
@@ -264,7 +264,7 @@ const deleteProject = async (req, res) => {
     const result = await deleteProjectService(projectId, userId);
     res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 };
 
