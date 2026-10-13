@@ -58,9 +58,7 @@ const sendMessageRequest = async (senderId, receiverId, initialMessage) => {
       status: "PENDING",
     },
     include: {
-      sender: {
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
-      },
+      sender: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
     },
   });
 
@@ -82,12 +80,8 @@ const respondToMessageRequest = async (requestId, receiverId, status) => {
   const request = await prisma.messageRequest.findUnique({
     where: { id: requestId },
     include: {
-      sender: {
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
-      },
-      receiver: {
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
-      },
+      sender: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+      receiver: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
     },
   });
 
@@ -184,12 +178,8 @@ const listMessageRequests = async (userId, direction = "received") => {
   return await prisma.messageRequest.findMany({
     where,
     include: {
-      sender: {
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
-      },
-      receiver: {
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
-      },
+      sender: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+      receiver: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -231,9 +221,7 @@ const sendDirectMessage = async (senderId, chatId, { content, parentId, voiceUrl
       parent: {
         select: { id: true, content: true, senderId: true, createdAt: true },
       },
-      sender: {
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
-      },
+      sender: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
     },
   });
 

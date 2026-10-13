@@ -61,6 +61,7 @@ const registerNotificationListeners = (subscriberClient) => {
   // Subscribe to notification-related channels
   subscriberClient.subscribe(
     EVENT_TYPES.PROJECT_CREATED,
+    EVENT_TYPES.PROJECT_DELETED,
     EVENT_TYPES.COLLABORATOR_INVITED,
     EVENT_TYPES.COLLABORATOR_INVITE_ACCEPTED,
     EVENT_TYPES.COLLABORATOR_INVITE_DECLINED,
@@ -87,6 +88,10 @@ const registerNotificationListeners = (subscriberClient) => {
       switch (channel) {
         case EVENT_TYPES.PROJECT_CREATED:
           await handleProjectCreated(payload);
+          break;
+
+        case EVENT_TYPES.PROJECT_DELETED:
+          await handleProjectDeleted(payload);
           break;
 
         case EVENT_TYPES.COLLABORATOR_INVITED:
@@ -569,6 +574,65 @@ const handleUserModerated = async ({ userId, action, reason }) => {
     type: "NOTIFICATION",
     data: notification,
   });
+};
+
+/**
+ * Handle PROJECT_DELETED event:
+ * - Send confirmation notification to the project owner
+ * - Send notification to all active collaborators that the project has been deleted
+ * - Push real-time notification via WebSocket
+ */
+const handleProjectDeleted = async ({ projectId, projectName, userId }) => {
+  console.log(`[Listener] Processing PROJECT_DELETED for project ${projectId}`);
+
+  // 1. Notify the owner
+  const canSendOwnerInApp = await shouldSend(userId, "inApp");
+  if (canSendOwnerInApp) {
+    const ownerNotification = await createNotification({
+      userId,
+      title: "Project Deleted",
+      message: `Your project "${projectName}" has been successfully deleted.`,
+      type: "SYSTEM",
+      link: "/projects",
+    });
+
+    sendToUser(userId, {
+      type: "NOTIFICATION",
+      data: ownerNotification,
+    });
+  }
+
+  // 2. Fetch and notify all active collaborators
+  try {
+    const collaborators = await prisma.projectCollaborator.findMany({
+      where: {
+        projectId,
+        isActive: true,
+        userId: { not: userId },
+      },
+      select: { userId: true },
+    });
+
+    for (const collab of collaborators) {
+      const canSendInApp = await shouldSend(collab.userId, "inApp");
+      if (!canSendInApp) continue;
+
+      const notification = await createNotification({
+        userId: collab.userId,
+        title: "Project Deleted",
+        message: `The project "${projectName}" you were collaborating on has been deleted by its owner.`,
+        type: "SYSTEM",
+        link: "/projects",
+      });
+
+      sendToUser(collab.userId, {
+        type: "NOTIFICATION",
+        data: notification,
+      });
+    }
+  } catch (err) {
+    console.error(`[Listener Error] Failed to notify collaborators on PROJECT_DELETED for ${projectId}:`, err.message);
+  }
 };
 
 module.exports = { registerNotificationListeners };

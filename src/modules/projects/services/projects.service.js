@@ -28,6 +28,7 @@ const checkConnection = async (userId, targetId) => {
 };
 
 const PROJECT_FILES_BUCKET = "project-files";
+const PROJECT_COVERS_BUCKET = "project-covers";
 const ALLOWED_PROJECT_FILE_TYPES = new Set([
   "audio/wav",
   "audio/x-wav",
@@ -58,7 +59,7 @@ const uploadProjectCoverFile = async (file, identifier = "temp") => {
   const storagePath = `covers/${identifier}_${Date.now()}.webp`;
 
   let { error: uploadError } = await supabase.storage
-    .from(PROJECT_FILES_BUCKET)
+    .from(PROJECT_COVERS_BUCKET)
     .upload(storagePath, optimizedBuffer, {
       contentType: "image/webp",
       upsert: true,
@@ -70,9 +71,9 @@ const uploadProjectCoverFile = async (file, identifier = "temp") => {
       uploadError.error === "Bucket not found" ||
       uploadError.message?.toLowerCase().includes("not found"))
   ) {
-    await supabase.storage.createBucket(PROJECT_FILES_BUCKET, { public: true });
+    await supabase.storage.createBucket(PROJECT_COVERS_BUCKET, { public: true });
     const retryResult = await supabase.storage
-      .from(PROJECT_FILES_BUCKET)
+      .from(PROJECT_COVERS_BUCKET)
       .upload(storagePath, optimizedBuffer, {
         contentType: "image/webp",
         upsert: true,
@@ -88,7 +89,7 @@ const uploadProjectCoverFile = async (file, identifier = "temp") => {
   }
 
   const { data: publicUrlData } = supabase.storage
-    .from(PROJECT_FILES_BUCKET)
+    .from(PROJECT_COVERS_BUCKET)
     .getPublicUrl(storagePath);
 
   return publicUrlData.publicUrl;
@@ -568,6 +569,7 @@ const getProjectListService = async (userId, filters = {}) => {
     genre,
     sortBy = "createdAt",
     sortOrder = "desc",
+    hasMessages,
   } = filters;
   const skip =
     (Math.max(1, parseInt(page) || 1) - 1) *
@@ -632,6 +634,18 @@ const getProjectListService = async (userId, filters = {}) => {
     });
   }
 
+  if (hasMessages === "true" || hasMessages === true) {
+    where.AND.push({
+      messages: {
+        some: {
+          NOT: {
+            content: { startsWith: "👋 Welcome to the" },
+          },
+        },
+      },
+    });
+  }
+
   // Define allowed sorting fields to prevent injection or invalid fields
   const allowedSortFields = ["createdAt", "updatedAt", "name", "startDate"];
   const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
@@ -666,6 +680,27 @@ const getProjectListService = async (userId, filters = {}) => {
               avatarUrl: true,
             },
           },
+        },
+      },
+      messages: {
+        where: {
+          NOT: {
+            content: { startsWith: "👋 Welcome to the" },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      },
+      _count: {
+        select: {
+          messages: {
+            where: {
+              NOT: {
+                content: { startsWith: "👋 Welcome to the" },
+              },
+            },
+          },
+          files: true,
         },
       },
     },
@@ -1105,23 +1140,37 @@ const updateProjectService = async (projectId, userId, updateData) => {
 };
 
 const deleteProjectService = async (projectId, userId) => {
+  if (!projectId) {
+    const error = new Error("Project ID is required.");
+    error.status = 400;
+    throw error;
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { ownerId: true, name: true, isDeleted: true },
   });
 
   if (!project || project.isDeleted) {
-    throw new Error("Project not found.");
+    const error = new Error("Project not found.");
+    error.status = 404;
+    throw error;
   }
 
   if (project.ownerId !== userId) {
-    throw new Error("Only the project owner can delete this project.");
+    const error = new Error("Only the project owner can delete this project.");
+    error.status = 403;
+    throw error;
   }
 
-  // Soft delete — also set status to INACTIVE so deleted projects don't appear in active counts
+  // Soft delete — set status to INACTIVE so deleted projects don't appear in active counts, and close to collaborators
   await prisma.project.update({
     where: { id: projectId },
-    data: { isDeleted: true, status: "INACTIVE" },
+    data: {
+      isDeleted: true,
+      status: "INACTIVE",
+      openToCollaborators: false,
+    },
   });
 
   // 1. Record project activity log
@@ -1147,6 +1196,8 @@ const deleteProjectService = async (projectId, userId) => {
           projectId,
           projectName: project.name,
           isDeleted: true,
+          status: "INACTIVE",
+          openToCollaborators: false,
           deletedAt: new Date().toISOString(),
         },
       },
