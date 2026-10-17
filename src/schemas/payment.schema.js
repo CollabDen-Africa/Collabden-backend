@@ -12,6 +12,13 @@ const initializeFundingSchema = z.object({
     .enum(["card", "banktransfer", "ussd"], {
       required_error: "Payment method is required",
     }),
+  redirectUrl: z
+    .string()
+    .url("Redirect URL must be a valid URL")
+    .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), {
+      message: "Redirect URL must use HTTP or HTTPS",
+    })
+    .optional(),
 });
 
 /**

@@ -293,6 +293,11 @@ router.get("/transactions", getTransactions);
  *                 enum: [card, banktransfer, ussd]
  *                 description: Preferred payment method
  *                 example: card
+ *               redirectUrl:
+ *                 type: string
+ *                 format: uri
+ *                 description: Optional trusted frontend URL to return to after payment. Defaults to FLW_REDIRECT_URL when omitted.
+ *                 example: https://collabden-frontend-nine.vercel.app/workspace/payment
  *     responses:
  *       200:
  *         description: Payment initialized successfully

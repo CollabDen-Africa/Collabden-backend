@@ -2,6 +2,57 @@ const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 
 const FLW_BASE_URL = "https://api.flutterwave.com/v3";
+const DEFAULT_ALLOWED_REDIRECT_ORIGINS = [
+  "https://collabden-frontend-nine.vercel.app",
+  "http://localhost:3000",
+];
+
+/**
+ * Resolve the post-payment redirect URL.
+ * A caller-provided URL must use a trusted frontend origin. When omitted, the
+ * existing FLW_REDIRECT_URL configuration remains the default.
+ */
+const resolvePaymentRedirectUrl = (requestedRedirectUrl) => {
+  const configuredRedirectUrl = process.env.FLW_REDIRECT_URL;
+  const redirectUrl = requestedRedirectUrl?.trim() || configuredRedirectUrl;
+
+  if (!redirectUrl) {
+    throw new Error("Payment redirect URL is not configured.");
+  }
+
+  let parsedRedirectUrl;
+  try {
+    parsedRedirectUrl = new URL(redirectUrl);
+  } catch {
+    throw new Error("Payment redirect URL is invalid.");
+  }
+
+  if (!["http:", "https:"].includes(parsedRedirectUrl.protocol)) {
+    throw new Error("Payment redirect URL must use HTTP or HTTPS.");
+  }
+
+  if (requestedRedirectUrl) {
+    const allowedOrigins = [
+      ...DEFAULT_ALLOWED_REDIRECT_ORIGINS,
+      process.env.FRONTEND_URL,
+    ]
+      .filter(Boolean)
+      .map((value) => value.trim())
+      .flatMap((value) => {
+        try {
+          return [new URL(value).origin];
+        } catch {
+          return [];
+        }
+      });
+
+    if (!new Set(allowedOrigins).has(parsedRedirectUrl.origin)) {
+      throw new Error("Redirect URL origin is not allowed.");
+    }
+  }
+
+  return redirectUrl;
+};
 
 /**
  * Get configured axios instance for Flutterwave API calls.
@@ -37,23 +88,12 @@ const generateTxRef = (type = "TXN") => {
  * @param {number} params.amount - Amount in NGN
  * @param {string} params.email - User's email address
  * @param {string} params.paymentMethod - Payment method (card, banktransfer, ussd)
+ * @param {string} [params.redirectUrl] - Optional frontend return URL
  * @returns {object} { paymentLink, txRef } - Flutterwave payment link and transaction reference
  */
 const initializePayment = async ({ userId, amount, email, paymentMethod, redirectUrl }) => {
   const txRef = generateTxRef("FUND");
-  
-  const frontendBaseUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
-  const defaultRedirect = frontendBaseUrl ? `${frontendBaseUrl}/workspace/payment` : null;
-  const finalRedirectUrl = redirectUrl || process.env.FLW_REDIRECT_URL || defaultRedirect;
-
-  if (!finalRedirectUrl) {
-    console.error(
-      "[Payment Configuration Error] Missing FRONTEND_URL or FLW_REDIRECT_URL in backend environment settings."
-    );
-    throw new Error(
-      "Payment checkout could not be initialized at this time. Please try again later or contact support."
-    );
-  }
+  const resolvedRedirectUrl = resolvePaymentRedirectUrl(redirectUrl);
 
   const flwClient = getFlwClient();
 
@@ -61,7 +101,7 @@ const initializePayment = async ({ userId, amount, email, paymentMethod, redirec
     tx_ref: txRef,
     amount,
     currency: "NGN",
-    redirect_url: finalRedirectUrl,
+    redirect_url: resolvedRedirectUrl,
     payment_options: paymentMethod,
     customer: {
       email,
@@ -199,6 +239,7 @@ const fetchBanks = async () => {
 
 module.exports = {
   generateTxRef,
+  resolvePaymentRedirectUrl,
   initializePayment,
   verifyPayment,
   validateWebhookHash,

@@ -41,6 +41,7 @@ RESEND_API_KEY="re_xxxxxxxxxxxxxxxx"
 
 # App
 FRONTEND_URL="http://localhost:3000"
+FLW_REDIRECT_URL="http://localhost:3000/payment/wallet"
 PORT=5050
 
 Tip: Generate a secure JWT secret by running:

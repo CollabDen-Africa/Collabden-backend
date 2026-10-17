@@ -197,6 +197,7 @@ const debitWallet = async (userId, amount, type, reference, description = null, 
  * @param {string} userId - The user's ID
  * @param {number} amount - Amount to fund
  * @param {string} paymentMethod - Payment method (card, banktransfer, ussd)
+ * @param {string} [redirectUrl] - Optional frontend URL to return to after payment
  * @returns {object} { paymentLink, txRef }
  */
 const initializeFunding = async (userId, amount, paymentMethod, redirectUrl) => {
