@@ -68,6 +68,10 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.MESSAGE_REQUEST_SENT,
     EVENT_TYPES.MESSAGE_REQUEST_ACCEPTED,
     EVENT_TYPES.MESSAGE_SENT,
+    EVENT_TYPES.PROJECT_MESSAGE_SENT,
+    EVENT_TYPES.TASK_ASSIGNED,
+    EVENT_TYPES.TASK_STATUS_CHANGED,
+    EVENT_TYPES.TASK_COMMENT_ADDED,
     EVENT_TYPES.CONNECTION_REQUEST_SENT,
     EVENT_TYPES.CONNECTION_REQUEST_ACCEPTED,
     EVENT_TYPES.AVAILABILITY_STATUS_UPDATED,
@@ -116,6 +120,22 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.MESSAGE_SENT:
           await handleMessageSent(payload);
+          break;
+
+        case EVENT_TYPES.PROJECT_MESSAGE_SENT:
+          await handleProjectMessageSent(payload);
+          break;
+
+        case EVENT_TYPES.TASK_ASSIGNED:
+          await handleTaskAssigned(payload);
+          break;
+
+        case EVENT_TYPES.TASK_STATUS_CHANGED:
+          await handleTaskStatusChanged(payload);
+          break;
+
+        case EVENT_TYPES.TASK_COMMENT_ADDED:
+          await handleTaskCommentAdded(payload);
           break;
 
         case EVENT_TYPES.CONNECTION_REQUEST_SENT:
@@ -380,6 +400,138 @@ const handleMessageSent = async ({ message, recipientId, senderName }) => {
   sendToUser(recipientId, {
     type: "NOTIFICATION",
     data: notification,
+  });
+};
+
+
+const handleProjectMessageSent = async ({
+  message,
+  projectId,
+  projectName,
+  senderName,
+  recipientIds,
+}) => {
+  console.log(
+    `[Listener] Processing PROJECT_MESSAGE_SENT for project ${projectId}`
+  );
+
+  const recipients = Array.isArray(recipientIds) ? recipientIds : [];
+  const preview =
+    message?.messageType === "VOICE"
+      ? "sent a voice note"
+      : message?.content
+        ? `: ${message.content.slice(0, 80)}`
+        : "shared an attachment";
+
+  for (const recipientId of recipients) {
+    sendToUser(recipientId, {
+      type: "PROJECT_MESSAGE",
+      data: { projectId, message },
+    });
+
+    const canSendInApp = await shouldSend(recipientId, "inApp");
+    if (!canSendInApp) continue;
+
+    const notification = await createNotification({
+      userId: recipientId,
+      title: `New message in ${projectName || "a project"}`,
+      message:
+        `${senderName || "A collaborator"} ${preview.startsWith(":") ? preview : preview}`.trim(),
+      type: "PROJECT_MESSAGE",
+      link: `/projects/${projectId}`,
+    });
+
+    sendToUser(recipientId, {
+      type: "NOTIFICATION",
+      data: notification,
+    });
+  }
+};
+
+const fanOutTaskNotification = async ({
+  recipientIds,
+  title,
+  message,
+  link,
+  type,
+  wsType,
+  wsData,
+}) => {
+  const recipients = Array.isArray(recipientIds) ? recipientIds : [];
+  for (const recipientId of recipients) {
+    if (wsType) {
+      sendToUser(recipientId, { type: wsType, data: wsData });
+    }
+    const canSendInApp = await shouldSend(recipientId, "inApp");
+    if (!canSendInApp) continue;
+
+    const notification = await createNotification({
+      userId: recipientId,
+      title,
+      message,
+      type,
+      link,
+    });
+    sendToUser(recipientId, { type: "NOTIFICATION", data: notification });
+  }
+};
+
+const handleTaskAssigned = async ({
+  projectId,
+  projectName,
+  taskId,
+  taskTitle,
+  actorName,
+  assigneeIds,
+}) => {
+  await fanOutTaskNotification({
+    recipientIds: assigneeIds,
+    title: "You were assigned a task",
+    message: `${actorName || "A collaborator"} assigned "${taskTitle}" to you in "${projectName || "a project"}".`,
+    type: "TASK_ASSIGNED",
+    link: `/projects/${projectId}/tasks/${taskId}`,
+    wsType: "TASK_ASSIGNED",
+    wsData: { projectId, taskId },
+  });
+};
+
+const handleTaskStatusChanged = async ({
+  projectId,
+  projectName,
+  taskId,
+  taskTitle,
+  from,
+  to,
+  recipientIds,
+}) => {
+  const niceStatus = (s) => (s || "").replace("_", " ").toLowerCase();
+  await fanOutTaskNotification({
+    recipientIds,
+    title: "Task status updated",
+    message: `"${taskTitle}" moved from ${niceStatus(from)} to ${niceStatus(to)} in "${projectName || "a project"}".`,
+    type: "TASK_STATUS_CHANGED",
+    link: `/projects/${projectId}/tasks/${taskId}`,
+    wsType: "TASK_STATUS_CHANGED",
+    wsData: { projectId, taskId, from, to },
+  });
+};
+
+const handleTaskCommentAdded = async ({
+  projectId,
+  projectName,
+  taskId,
+  taskTitle,
+  authorName,
+  recipientIds,
+}) => {
+  await fanOutTaskNotification({
+    recipientIds,
+    title: "New task comment",
+    message: `${authorName || "A collaborator"} commented on "${taskTitle}" in "${projectName || "a project"}".`,
+    type: "TASK_COMMENT_ADDED",
+    link: `/projects/${projectId}/tasks/${taskId}`,
+    wsType: "TASK_COMMENT_ADDED",
+    wsData: { projectId, taskId },
   });
 };
 

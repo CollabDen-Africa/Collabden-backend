@@ -30,6 +30,20 @@ const initWebSocket = (server) => {
 
           console.log(`[WebSocket] User ${authenticatedUserId} connected`);
           ws.send(JSON.stringify({ type: "AUTH_SUCCESS" }));
+          return;
+        }
+
+        // Typing indicator relay: forward {TYPING, chatId, recipientId, isTyping}
+        // from the authenticated sender to the specified recipient only.
+        if (parsed.type === "TYPING" && authenticatedUserId && parsed.recipientId && parsed.chatId) {
+          sendToUser(parsed.recipientId, {
+            type: "TYPING",
+            data: {
+              chatId: parsed.chatId,
+              userId: authenticatedUserId,
+              isTyping: Boolean(parsed.isTyping),
+            },
+          });
         }
       } catch (err) {
         // Ignore non-JSON messages

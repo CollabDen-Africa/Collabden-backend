@@ -3,9 +3,27 @@ const multer = require("multer");
 const {
   createProject,
   uploadProjectFile,
+  listProjectFiles,
+  getFileVersions,
+  restoreFileVersion,
+  streamProjectFile,
+  downloadProjectFile,
+  deleteFileVersion,
+  deleteProjectFile,
+  getProjectStorageUsage,
   sendProjectMessage,
+  getProjectMessages,
+  markProjectMessagesRead,
+  reactToProjectMessage,
+  uploadProjectMessageAttachment,
   createProjectTask,
-  updateProjectTaskStatus,
+  listProjectTasks,
+  getProjectTaskDetails,
+  updateProjectTask,
+  deleteProjectTask,
+  addProjectTaskComment,
+  listProjectTaskComments,
+  deleteProjectTaskComment,
   getProjects,
   getProjectDetails,
   inviteCollaborator,
@@ -35,9 +53,16 @@ const {
 } = require("../controllers/applications.controller");
 
 const router = Router();
+const { MAX_FILE_UPLOAD_MB } = require("../../../config/constants");
+const { MAX_ATTACHMENT_BYTES } = require("../services/projectMessageAttachments.service");
 const projectFileUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: MAX_FILE_UPLOAD_MB * 1024 * 1024 },
+});
+
+const messageAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_ATTACHMENT_BYTES },
 });
 
 const coverImageUpload = multer({
@@ -172,10 +197,227 @@ router.post("/:id/files", projectFileUpload.single("file"), uploadProjectFile);
 
 /**
  * @swagger
+ * /api/v1/projects/{id}/files:
+ *   get:
+ *     summary: List files in a project workspace (with current version metadata)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Files returned
+ */
+router.get("/:id/files", listProjectFiles);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files/{fileId}/versions:
+ *   get:
+ *     summary: List all versions of a project file
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Versions returned (newest first)
+ */
+router.get("/:id/files/:fileId/versions", getFileVersions);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files/{fileId}/versions/{versionId}/restore:
+ *   post:
+ *     summary: Restore an older version as the current version of a file
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: versionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Version restored
+ */
+router.post("/:id/files/:fileId/versions/:versionId/restore", restoreFileVersion);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files/{fileId}/versions/{versionId}:
+ *   delete:
+ *     summary: Delete a specific older version of a file (current version cannot be deleted)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: versionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Version deleted
+ */
+router.delete("/:id/files/:fileId/versions/:versionId", deleteFileVersion);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files/{fileId}/stream:
+ *   get:
+ *     summary: Issue a short-lived signed URL for streaming playback of a file (or specific version)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: versionId
+ *         required: false
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Signed URL returned with TTL
+ */
+router.get("/:id/files/:fileId/stream", streamProjectFile);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files/{fileId}/download:
+ *   get:
+ *     summary: Issue a short-lived signed URL for downloading the file (or a specific version)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: versionId
+ *         required: false
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Signed download URL returned
+ */
+router.get("/:id/files/:fileId/download", downloadProjectFile);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files/{fileId}:
+ *   delete:
+ *     summary: Delete a project file and every version (uploader or project owner only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: File deleted
+ */
+router.delete("/:id/files/:fileId", deleteProjectFile);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/storage:
+ *   get:
+ *     summary: Report storage usage for the project owner's tier
+ *     description: |
+ *       Returns bytes used across every project owned by this project's owner, the owner's tier
+ *       limit, the per-file cap, and the current retention policy. Use this to render the
+ *       "150 MB / 500 MB used" indicator in the UI and to prompt upgrades.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Storage usage returned
+ */
+router.get("/:id/storage", getProjectStorageUsage);
+
+/**
+ * @swagger
  * /api/v1/projects/{id}/messages:
  *   post:
- *     summary: Send a project workspace message
- *     description: Sends a message to the project workspace as the authenticated collaborator.
+ *     summary: Send a project workspace message, voice note, or attachment-only message
+ *     description: |
+ *       Posts a new message in the project workspace conversation. A message must include at
+ *       least one of: text content, a voice note (`voiceUrl` + `voiceDuration`), or one or more
+ *       attachments. Use `parentId` to reply to an existing message.
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []
@@ -191,22 +433,192 @@ router.post("/:id/files", projectFileUpload.single("file"), uploadProjectFile);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [content]
  *             properties:
  *               content:
  *                 type: string
  *                 maxLength: 5000
+ *               parentId:
+ *                 type: string
+ *                 description: ID of the project message being replied to
+ *               voiceUrl:
+ *                 type: string
+ *                 description: URL to a previously uploaded voice note file
+ *               voiceDuration:
+ *                 type: integer
+ *                 description: Voice note duration in seconds (max 180)
+ *               attachments:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [url]
+ *                   properties:
+ *                     url:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     mimeType:
+ *                       type: string
+ *                     size:
+ *                       type: integer
  *     responses:
  *       201:
  *         description: Message sent successfully
  *       400:
- *         description: Message content is required
+ *         description: Invalid payload (no content/voice/attachment, bad reply target, voice too long, etc.)
  *       401:
  *         description: Missing or invalid user bearer token
- *       403:
- *         description: User cannot message this project
+ *       404:
+ *         description: Project not found or no access
+ *   get:
+ *     summary: List project workspace messages (newest cursor pagination)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *       - in: query
+ *         name: beforeId
+ *         schema:
+ *           type: string
+ *         description: Return messages older than this message id (cursor)
+ *     responses:
+ *       200:
+ *         description: Messages returned in chronological order; messages visible to the caller are marked as read
+ *       401:
+ *         description: Missing or invalid user bearer token
+ *       404:
+ *         description: Project not found or no access
  */
 router.post("/:id/messages", sendProjectMessage);
+router.get("/:id/messages", getProjectMessages);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/messages/read:
+ *   patch:
+ *     summary: Mark all unread project messages as read for the caller
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Read receipts persisted
+ */
+router.patch("/:id/messages/read", markProjectMessagesRead);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/messages/{messageId}/reactions:
+ *   post:
+ *     summary: Toggle an emoji reaction on a project message
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: messageId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [emoji]
+ *             properties:
+ *               emoji:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Reaction toggled
+ */
+router.post("/:id/messages/:messageId/reactions", reactToProjectMessage);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/messages/attachments:
+ *   post:
+ *     summary: Upload an attachment for a project workspace message
+ *     description: |
+ *       Accepts one file (max 50 MB) and stores it in the private `message-attachments` bucket.
+ *       Returns the storage `path` and a short-lived signed URL for immediate preview.
+ *       Submit the returned `path`, `name`, `mimeType`, and `size` inside the `attachments`
+ *       array when calling `POST /projects/:id/messages` — read endpoints will re-sign the URL
+ *       on fetch so recipients always get a fresh link.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Image, PDF, Office doc, audio file, or zip archive
+ *     responses:
+ *       201:
+ *         description: Attachment uploaded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 path:
+ *                   type: string
+ *                   description: Storage key to submit as attachments[].url on message create
+ *                 signedUrl:
+ *                   type: string
+ *                 name:
+ *                   type: string
+ *                 mimeType:
+ *                   type: string
+ *                 size:
+ *                   type: integer
+ *                 expiresInSeconds:
+ *                   type: integer
+ *       400:
+ *         description: Missing file or unsupported type
+ *       413:
+ *         description: File larger than 50 MB
+ */
+router.post(
+  "/:id/messages/attachments",
+  messageAttachmentUpload.single("file"),
+  uploadProjectMessageAttachment,
+);
 
 /**
  * @swagger
@@ -239,26 +651,83 @@ router.post("/:id/messages", sendProjectMessage);
  *               dueDate:
  *                 type: string
  *                 format: date-time
+ *                 nullable: true
  *               status:
  *                 type: string
- *                 enum: [TODO, IN_PROGRESS, COMPLETED]
+ *                 enum: [TODO, IN_PROGRESS, IN_REVIEW, DONE]
+ *               priority:
+ *                 type: string
+ *                 enum: [LOW, MEDIUM, HIGH]
+ *               assigneeIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Must be active collaborators on this project
  *     responses:
  *       201:
  *         description: Task created successfully
- *       400:
- *         description: Invalid task input
- *       401:
- *         description: Missing or invalid user bearer token
- *       403:
- *         description: User cannot create tasks in this project
+ *   get:
+ *     summary: List project tasks (filterable; optionally grouped by status for a Kanban board)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [TODO, IN_PROGRESS, IN_REVIEW, DONE]
+ *       - in: query
+ *         name: priority
+ *         schema:
+ *           type: string
+ *           enum: [LOW, MEDIUM, HIGH]
+ *       - in: query
+ *         name: assigneeId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: groupBy
+ *         schema:
+ *           type: string
+ *           enum: [status]
+ *         description: If "status", returns a board object keyed by each status column.
+ *     responses:
+ *       200:
+ *         description: Tasks returned
  */
 router.post("/:id/tasks", createProjectTask);
+router.get("/:id/tasks", listProjectTasks);
 
 /**
  * @swagger
  * /api/v1/projects/{id}/tasks/{taskId}:
+ *   get:
+ *     summary: Get a project task with its comments
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task details returned
  *   patch:
- *     summary: Update a project task status
+ *     summary: Update any mutable field on a project task (title, description, status, priority, dueDate, assigneeIds)
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []
@@ -279,22 +748,143 @@ router.post("/:id/tasks", createProjectTask);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [status]
  *             properties:
+ *               title:
+ *                 type: string
+ *                 maxLength: 150
+ *               description:
+ *                 type: string
+ *                 maxLength: 2000
+ *                 nullable: true
  *               status:
  *                 type: string
- *                 enum: [TODO, IN_PROGRESS, COMPLETED]
+ *                 enum: [TODO, IN_PROGRESS, IN_REVIEW, DONE]
+ *               priority:
+ *                 type: string
+ *                 enum: [LOW, MEDIUM, HIGH]
+ *               dueDate:
+ *                 type: string
+ *                 format: date-time
+ *                 nullable: true
+ *               assigneeIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
  *     responses:
  *       200:
- *         description: Task status updated successfully
- *       400:
- *         description: Invalid task status
- *       401:
- *         description: Missing or invalid user bearer token
- *       403:
- *         description: User cannot update this task
+ *         description: Task updated
+ *   delete:
+ *     summary: Delete a project task (creator or project owner only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task deleted
  */
-router.patch("/:id/tasks/:taskId", updateProjectTaskStatus);
+router.get("/:id/tasks/:taskId", getProjectTaskDetails);
+router.patch("/:id/tasks/:taskId", updateProjectTask);
+router.delete("/:id/tasks/:taskId", deleteProjectTask);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/tasks/{taskId}/comments:
+ *   get:
+ *     summary: List all comments on a task
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Comments returned (chronological)
+ *   post:
+ *     summary: Add a comment or threaded reply to a task
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [content]
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 maxLength: 2000
+ *               parentId:
+ *                 type: string
+ *                 description: ID of the comment being replied to (optional)
+ *     responses:
+ *       201:
+ *         description: Comment created
+ */
+router.get("/:id/tasks/:taskId/comments", listProjectTaskComments);
+router.post("/:id/tasks/:taskId/comments", addProjectTaskComment);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/tasks/{taskId}/comments/{commentId}:
+ *   delete:
+ *     summary: Delete a task comment (author or project owner only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: commentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Comment deleted
+ */
+router.delete("/:id/tasks/:taskId/comments/:commentId", deleteProjectTaskComment);
 
 /**
  * @swagger

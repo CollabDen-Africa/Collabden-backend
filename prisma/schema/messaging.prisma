@@ -37,24 +37,38 @@ model DirectChat {
 }
 
 model DirectMessage {
-  id            String                  @id @default(cuid())
+  id            String                     @id @default(cuid())
   chatId        String
   senderId      String
   content       String?
   voiceUrl      String?
   voiceDuration Int?
-  isRead        Boolean                 @default(false)
+  isRead        Boolean                    @default(false)
   parentId      String?
-  parent        DirectMessage?          @relation("DirectMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies       DirectMessage[]         @relation("DirectMessageReplies")
+  parent        DirectMessage?             @relation("DirectMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies       DirectMessage[]            @relation("DirectMessageReplies")
   reactions     DirectMessageReaction[]
-  chat          DirectChat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sender        UserProfile             @relation("DirectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  attachments   DirectMessageAttachment[]
+  chat          DirectChat                 @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender        UserProfile                @relation("DirectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
 
   @@index([chatId])
   @@index([senderId])
+}
+
+model DirectMessageAttachment {
+  id        String        @id @default(cuid())
+  messageId String
+  url       String
+  name      String?
+  mimeType  String?
+  size      Int?
+  message   DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@index([messageId])
 }
 
 model DirectMessageReaction {

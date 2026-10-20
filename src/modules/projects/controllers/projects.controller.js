@@ -1,9 +1,5 @@
 const {
   createProjectService,
-  uploadProjectFileService,
-  sendProjectMessageService,
-  createProjectTaskService,
-  updateProjectTaskStatusService,
   getProjectListService,
   getProjectDetailsService,
   inviteCollaboratorService,
@@ -18,6 +14,36 @@ const {
   reportProjectService,
   uploadProjectCoverService,
 } = require("../services/projects.service");
+const {
+  sendProjectMessage: sendProjectMessageService,
+  listProjectMessages: listProjectMessagesService,
+  markProjectMessagesRead: markProjectMessagesReadService,
+  toggleProjectMessageReaction: toggleProjectMessageReactionService,
+} = require("../services/projectMessaging.service");
+const {
+  uploadMessageAttachment: uploadMessageAttachmentService,
+} = require("../services/projectMessageAttachments.service");
+const {
+  createTask: createTaskService,
+  listTasks: listTasksService,
+  getTaskDetails: getTaskDetailsService,
+  updateTask: updateTaskService,
+  deleteTask: deleteTaskService,
+  addTaskComment: addTaskCommentService,
+  listTaskComments: listTaskCommentsService,
+  deleteTaskComment: deleteTaskCommentService,
+} = require("../services/projectTasks.service");
+const {
+  uploadProjectFile: uploadProjectFileService,
+  listProjectFiles: listProjectFilesService,
+  listFileVersions: listFileVersionsService,
+  restoreFileVersion: restoreFileVersionService,
+  streamProjectFile: streamProjectFileService,
+  downloadProjectFile: downloadProjectFileService,
+  deleteProjectFileVersion: deleteProjectFileVersionService,
+  deleteProjectFile: deleteProjectFileService,
+  getProjectStorageUsage: getProjectStorageUsageService,
+} = require("../services/projectFiles.service");
 const {
   getProjectRoyaltySplits,
   updateProjectRoyaltySplits,
@@ -96,12 +122,104 @@ const uploadProjectFile = async (req, res) => {
       return res.status(400).json({ error: "No file uploaded." });
     }
 
+    const { fileId, durationSeconds } = req.body || {};
     const projectFile = await uploadProjectFileService(
       req.params.id,
       req.user.id,
       req.file,
+      { fileId, durationSeconds },
     );
     return res.status(201).json({ file: projectFile });
+  } catch (error) {
+    const body = { error: error.message, code: error.code };
+    for (const k of ["usedBytes", "filesBytes", "chatBytes", "limitBytes", "upgradeTo"]) {
+      if (error[k] !== undefined) body[k] = error[k];
+    }
+    return res.status(error.status || 500).json(body);
+  }
+};
+
+const listProjectFiles = async (req, res) => {
+  try {
+    const files = await listProjectFilesService(req.params.id, req.user.id);
+    return res.status(200).json({ files });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const getFileVersions = async (req, res) => {
+  try {
+    const data = await listFileVersionsService(req.params.id, req.params.fileId, req.user.id);
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const restoreFileVersion = async (req, res) => {
+  try {
+    const file = await restoreFileVersionService(
+      req.params.id,
+      req.params.fileId,
+      req.params.versionId,
+      req.user.id,
+    );
+    return res.status(200).json({ file });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const streamProjectFile = async (req, res) => {
+  try {
+    const data = await streamProjectFileService(req.params.id, req.params.fileId, req.user.id, {
+      versionId: req.query.versionId,
+    });
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const downloadProjectFile = async (req, res) => {
+  try {
+    const data = await downloadProjectFileService(req.params.id, req.params.fileId, req.user.id, {
+      versionId: req.query.versionId,
+    });
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const deleteFileVersion = async (req, res) => {
+  try {
+    const data = await deleteProjectFileVersionService(
+      req.params.id,
+      req.params.fileId,
+      req.params.versionId,
+      req.user.id,
+    );
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const deleteProjectFile = async (req, res) => {
+  try {
+    const data = await deleteProjectFileService(req.params.id, req.params.fileId, req.user.id);
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const getProjectStorageUsage = async (req, res) => {
+  try {
+    const data = await getProjectStorageUsageService(req.params.id, req.user.id);
+    return res.status(200).json(data);
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message });
   }
@@ -109,11 +227,60 @@ const uploadProjectFile = async (req, res) => {
 
 const sendProjectMessage = async (req, res) => {
   try {
-    const content = req.body?.content?.trim();
-    if (!content) return res.status(400).json({ error: "Message content is required." });
-
-    const message = await sendProjectMessageService(req.params.id, req.user.id, content);
+    const { content, parentId, voiceUrl, voiceDuration, attachments } = req.body || {};
+    const message = await sendProjectMessageService(req.params.id, req.user.id, {
+      content,
+      parentId,
+      voiceUrl,
+      voiceDuration,
+      attachments,
+    });
     return res.status(201).json({ message });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const getProjectMessages = async (req, res) => {
+  try {
+    const { limit, beforeId } = req.query;
+    const messages = await listProjectMessagesService(req.params.id, req.user.id, { limit, beforeId });
+    return res.status(200).json({ messages });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const markProjectMessagesRead = async (req, res) => {
+  try {
+    const result = await markProjectMessagesReadService(req.params.id, req.user.id);
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const uploadProjectMessageAttachment = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded. Include a file in the 'file' field." });
+    }
+    const result = await uploadMessageAttachmentService(req.params.id, req.user.id, req.file);
+    return res.status(201).json(result);
+  } catch (error) {
+    const body = { error: error.message, code: error.code };
+    for (const k of ["usedBytes", "filesBytes", "chatBytes", "limitBytes", "upgradeTo"]) {
+      if (error[k] !== undefined) body[k] = error[k];
+    }
+    return res.status(error.status || 500).json(body);
+  }
+};
+
+const reactToProjectMessage = async (req, res) => {
+  try {
+    const { emoji } = req.body || {};
+    const result = await toggleProjectMessageReactionService(req.user.id, req.params.messageId, emoji);
+    return res.status(200).json(result);
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message });
   }
@@ -121,22 +288,14 @@ const sendProjectMessage = async (req, res) => {
 
 const createProjectTask = async (req, res) => {
   try {
-    const title = req.body?.title?.trim();
-    const { description, dueDate, status } = req.body || {};
-
-    if (!title) return res.status(400).json({ error: "Task title is required." });
-    if (title.length > 150) return res.status(400).json({ error: "Task title cannot exceed 150 characters." });
-    if (description && description.length > 2000) return res.status(400).json({ error: "Task description cannot exceed 2000 characters." });
-    if (dueDate && Number.isNaN(new Date(dueDate).getTime())) return res.status(400).json({ error: "Due date is invalid." });
-    if (status && !["TODO", "IN_PROGRESS", "COMPLETED"].includes(status)) {
-      return res.status(400).json({ error: "Task status is invalid." });
-    }
-
-    const task = await createProjectTaskService(req.params.id, req.user.id, {
+    const { title, description, dueDate, status, priority, assigneeIds } = req.body || {};
+    const task = await createTaskService(req.params.id, req.user.id, {
       title,
-      description: description?.trim(),
+      description,
       dueDate,
       status,
+      priority,
+      assigneeIds,
     });
     return res.status(201).json({ task });
   } catch (error) {
@@ -144,15 +303,79 @@ const createProjectTask = async (req, res) => {
   }
 };
 
-const updateProjectTaskStatus = async (req, res) => {
+const listProjectTasks = async (req, res) => {
   try {
-    const { status } = req.body || {};
-    if (!["TODO", "IN_PROGRESS", "COMPLETED"].includes(status)) {
-      return res.status(400).json({ error: "Task status is invalid." });
-    }
+    const { status, priority, assigneeId, groupBy } = req.query;
+    const data = await listTasksService(req.params.id, req.user.id, {
+      status,
+      priority,
+      assigneeId,
+      groupBy,
+    });
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
 
-    const task = await updateProjectTaskStatusService(req.params.id, req.params.taskId, req.user.id, status);
+const getProjectTaskDetails = async (req, res) => {
+  try {
+    const task = await getTaskDetailsService(req.params.id, req.params.taskId, req.user.id);
     return res.status(200).json({ task });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const updateProjectTask = async (req, res) => {
+  try {
+    const task = await updateTaskService(req.params.id, req.params.taskId, req.user.id, req.body || {});
+    return res.status(200).json({ task });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const deleteProjectTask = async (req, res) => {
+  try {
+    const data = await deleteTaskService(req.params.id, req.params.taskId, req.user.id);
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const addProjectTaskComment = async (req, res) => {
+  try {
+    const { content, parentId } = req.body || {};
+    const comment = await addTaskCommentService(req.params.id, req.params.taskId, req.user.id, {
+      content,
+      parentId,
+    });
+    return res.status(201).json({ comment });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const listProjectTaskComments = async (req, res) => {
+  try {
+    const comments = await listTaskCommentsService(req.params.id, req.params.taskId, req.user.id);
+    return res.status(200).json({ comments });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
+const deleteProjectTaskComment = async (req, res) => {
+  try {
+    const data = await deleteTaskCommentService(
+      req.params.id,
+      req.params.taskId,
+      req.params.commentId,
+      req.user.id,
+    );
+    return res.status(200).json(data);
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message });
   }
@@ -396,9 +619,27 @@ const updateRoyaltySplits = async (req, res) => {
 module.exports = {
   createProject,
   uploadProjectFile,
+  listProjectFiles,
+  getFileVersions,
+  restoreFileVersion,
+  streamProjectFile,
+  downloadProjectFile,
+  deleteFileVersion,
+  deleteProjectFile,
+  getProjectStorageUsage,
   sendProjectMessage,
+  getProjectMessages,
+  markProjectMessagesRead,
+  reactToProjectMessage,
+  uploadProjectMessageAttachment,
   createProjectTask,
-  updateProjectTaskStatus,
+  listProjectTasks,
+  getProjectTaskDetails,
+  updateProjectTask,
+  deleteProjectTask,
+  addProjectTaskComment,
+  listProjectTaskComments,
+  deleteProjectTaskComment,
   getProjects,
   getProjectDetails,
   inviteCollaborator,
