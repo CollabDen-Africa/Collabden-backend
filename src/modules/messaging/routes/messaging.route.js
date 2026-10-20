@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 const router = express.Router();
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const {
@@ -13,7 +14,35 @@ const {
   patchChatArchive,
   deleteChatHandler,
   postCreateChat,
+  postVoiceUpload,
+  postDirectAttachmentUpload,
 } = require("../controllers/messaging.controller");
+const { MAX_VOICE_BYTES } = require("../services/voiceUpload.service");
+const { MAX_DM_ATTACHMENT_BYTES, ALLOWED_DM_ATTACHMENT_MIME_TYPES } = require("../services/directMessageAttachments.service");
+
+const voiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_VOICE_BYTES },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith("audio/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only audio files are allowed for voice notes."), false);
+    }
+  },
+});
+
+const dmAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_DM_ATTACHMENT_BYTES },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_DM_ATTACHMENT_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Unsupported attachment type. Allowed: images, PDFs, Office docs, and audio clips."), false);
+    }
+  },
+});
 
 router.use(authMiddleware);
 
@@ -514,5 +543,128 @@ router.patch("/chats/:chatId/archive", patchChatArchive);
  *         description: Unauthorized
  */
 router.delete("/chats/:chatId", deleteChatHandler);
+
+/**
+ * @swagger
+ * /api/v1/messaging/voice:
+ *   post:
+ *     summary: Upload a voice note (used by both DMs and project messaging)
+ *     description: |
+ *       Accepts a short audio recording (max 3 minutes, 10 MB), stores it in the private
+ *       `voice-notes` bucket, and returns the Supabase storage path plus a short-lived signed
+ *       playback URL. Submit the returned `path` as `voiceUrl` when calling
+ *       `POST /messaging/chats/:chatId/messages` or `POST /projects/:id/messages` —
+ *       read endpoints will re-sign the URL on fetch so recipients always get a fresh link.
+ *     tags: [Messaging]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [voice, durationSeconds]
+ *             properties:
+ *               voice:
+ *                 type: string
+ *                 format: binary
+ *                 description: Audio file (webm, ogg, m4a, aac, mp3, wav)
+ *               durationSeconds:
+ *                 type: integer
+ *                 description: Recorded duration (1–180 seconds)
+ *     responses:
+ *       201:
+ *         description: Voice note uploaded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 path:
+ *                   type: string
+ *                   description: Storage key to submit as voiceUrl on message create
+ *                 signedUrl:
+ *                   type: string
+ *                 mimeType:
+ *                   type: string
+ *                 size:
+ *                   type: integer
+ *                 durationSeconds:
+ *                   type: integer
+ *                 expiresInSeconds:
+ *                   type: integer
+ *       400:
+ *         description: Invalid payload (missing duration, bad mime, etc.)
+ *       413:
+ *         description: File larger than 10 MB or duration longer than 180s
+ */
+router.post("/voice", voiceUpload.single("voice"), postVoiceUpload);
+
+/**
+ * @swagger
+ * /api/v1/messaging/attachments:
+ *   post:
+ *     summary: Upload an attachment for a direct message
+ *     description: |
+ *       Accepts one file (max 10 MB) and stores it in the private `direct-message-attachments`
+ *       bucket. Returns a storage key (`url`) plus a short-lived signed preview URL.
+ *       Pass the returned `url`, `name`, `mimeType`, and `size` inside the `attachments`
+ *       array when calling `POST /messaging/chats/:chatId/messages` — read endpoints will
+ *       re-sign the URL on fetch so recipients always get a fresh link.
+ *       **Important:** use `url` (the storage key), not `signedUrl`, in the attachments payload —
+ *       signed URLs expire after 1 hour and will not be refreshed.
+ *     tags: [Messaging]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Attachment uploaded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url:
+ *                   type: string
+ *                   description: Storage key — pass this as `url` in the attachments array
+ *                   example: userId/1234567890-abc123-photo.jpg
+ *                 path:
+ *                   type: string
+ *                   description: Alias for `url` (same value)
+ *                   example: userId/1234567890-abc123-photo.jpg
+ *                 signedUrl:
+ *                   type: string
+ *                   description: Short-lived preview URL (1 hour TTL) — do NOT store this
+ *                   example: https://example.supabase.co/storage/v1/object/sign/...
+ *                 name:
+ *                   type: string
+ *                   example: photo.jpg
+ *                 mimeType:
+ *                   type: string
+ *                   example: image/jpeg
+ *                 size:
+ *                   type: integer
+ *                   example: 204800
+ *                 expiresInSeconds:
+ *                   type: integer
+ *                   example: 3600
+ *       400:
+ *         description: Missing file or unsupported type
+ *       413:
+ *         description: File larger than 10 MB
+ */
+router.post("/attachments", dmAttachmentUpload.single("file"), postDirectAttachmentUpload);
 
 module.exports = router;

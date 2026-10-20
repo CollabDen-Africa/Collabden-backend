@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const waitlistController = require('../controllers/waitlist.controller');
-const { authMiddleware } = require("../middleware/auth.middleware");
 const { adminMiddleware } = require("../middleware/admin.middleware");
 
 /**
@@ -142,8 +141,7 @@ router.post("/", waitlistController.joinWaitlist);
  */
 router.get(
   "/",
-  authMiddleware,
-  adminMiddleware,
+  adminMiddleware(),
   waitlistController.getWaitlist
 );
 
@@ -173,8 +171,7 @@ router.get(
  */
 router.get(
   "/download",
-  authMiddleware,
-  adminMiddleware,
+  adminMiddleware(),
   waitlistController.downloadWaitlist
 );
 

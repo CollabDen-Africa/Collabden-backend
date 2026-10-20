@@ -91,10 +91,16 @@ app.use("/api/v1/admin/subscriptions", adminSubscriptionsRoutes);
 app.use("/api/v1/admin/support-tickets", adminSupportTicketsRoutes);
 app.use("/api/v1/admin/settings", adminSettingsRoutes);
 
+const multer = require("multer");
 app.use((err, req, res, next) => {
   // Handle JSON parsing errors from express.json()
-  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
     return res.status(400).json({ message: "Invalid JSON payload format." });
+  }
+
+  if (err instanceof multer.MulterError) {
+    const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+    return res.status(status).json({ error: err.message, code: err.code });
   }
 
   console.error(err.stack);

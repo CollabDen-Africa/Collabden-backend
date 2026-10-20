@@ -1,6 +1,14 @@
 const prisma = require("../../../config/prismaClient");
 const { publishEvent } = require("../../../events/publisher");
 const EVENT_TYPES = require("../../../events/eventTypes");
+const {
+  resolveMessageVoiceUrls,
+  resolveVoicePlaybackUrl,
+} = require("./voiceUpload.service");
+const {
+  resolveDirectMessageAttachmentUrls,
+  sanitizeAttachmentsPayload,
+} = require("./directMessageAttachments.service");
 
 /**
  * Send a message request to an unconnected user
@@ -188,7 +196,9 @@ const listMessageRequests = async (userId, direction = "received") => {
 /**
  * Send a message inside a direct chat
  */
-const sendDirectMessage = async (senderId, chatId, { content, parentId, voiceUrl, voiceDuration }) => {
+const MAX_DM_VOICE_DURATION_SECONDS = 180;
+
+const sendDirectMessage = async (senderId, chatId, { content, parentId, voiceUrl, voiceDuration, attachments }) => {
   const chat = await prisma.directChat.findUnique({
     where: { id: chatId },
   });
@@ -204,6 +214,23 @@ const sendDirectMessage = async (senderId, chatId, { content, parentId, voiceUrl
     throw new Error("Unauthorized to send messages in this chat.");
   }
 
+  if (voiceUrl) {
+    const duration = Number(voiceDuration);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      throw new Error("voiceDuration (seconds) is required for voice notes.");
+    }
+    if (duration > MAX_DM_VOICE_DURATION_SECONDS) {
+      throw new Error(`Voice notes cannot exceed ${MAX_DM_VOICE_DURATION_SECONDS} seconds.`);
+    }
+  }
+
+  const normalizedAttachments = sanitizeAttachmentsPayload(attachments);
+
+  const hasContent = typeof content === "string" && content.trim().length > 0;
+  if (!hasContent && !voiceUrl && normalizedAttachments.length === 0) {
+    throw new Error("A message must include content, a voice note, or at least one attachment.");
+  }
+
   // Determine recipient
   const recipientId = isUser1 ? chat.user2Id : chat.user1Id;
 
@@ -216,12 +243,16 @@ const sendDirectMessage = async (senderId, chatId, { content, parentId, voiceUrl
       voiceUrl,
       voiceDuration,
       parentId,
+      attachments: normalizedAttachments.length
+        ? { createMany: { data: normalizedAttachments } }
+        : undefined,
     },
     include: {
       parent: {
         select: { id: true, content: true, senderId: true, createdAt: true },
       },
       sender: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true } },
+      attachments: true,
     },
   });
 
@@ -236,7 +267,10 @@ const sendDirectMessage = async (senderId, chatId, { content, parentId, voiceUrl
     },
   });
 
-  // Publish Event
+  // Resolve voice storage path → signed URL so the response AND the WS fan-out can play immediately.
+  await resolveMessageVoiceUrls([message]);
+  await resolveDirectMessageAttachmentUrls([message]);
+
   const senderName = message.sender.displayName || `${message.sender.firstName} ${message.sender.lastName}`.trim() || message.sender.email;
   await publishEvent(EVENT_TYPES.MESSAGE_SENT, {
     message,
@@ -283,6 +317,7 @@ const listChats = async (userId) => {
           parent: {
             select: { id: true, content: true },
           },
+          attachments: true,
         },
       });
 
@@ -294,6 +329,11 @@ const listChats = async (userId) => {
           isRead: false,
         },
       });
+
+      if (lastMessage) {
+        await resolveMessageVoiceUrls([lastMessage]);
+        await resolveDirectMessageAttachmentUrls([lastMessage]);
+      }
 
       return {
         id: chat.id,
@@ -355,6 +395,7 @@ const getChatMessages = async (userId, chatId, limit = 50, beforeId = null) => {
           },
         },
       },
+      attachments: true,
     },
   });
 
@@ -367,6 +408,9 @@ const getChatMessages = async (userId, chatId, limit = 50, beforeId = null) => {
     },
     data: { isRead: true },
   });
+
+  await resolveMessageVoiceUrls(messages);
+  await resolveDirectMessageAttachmentUrls(messages);
 
   // Return messages sorted in chronological order (oldest first)
   return messages.reverse();
