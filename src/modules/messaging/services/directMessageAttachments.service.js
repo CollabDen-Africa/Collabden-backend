@@ -69,9 +69,17 @@ const uploadDirectMessageAttachment = async (userId, file) => {
   }
 
   const path = safeStorageKey(userId, file.originalname);
-  const { error: uploadError } = await supabase.storage
+  let { error: uploadError } = await supabase.storage
     .from(DIRECT_MESSAGE_ATTACHMENTS_BUCKET)
     .upload(path, file.buffer, { contentType: file.mimetype, upsert: false });
+
+  if (uploadError && (uploadError.statusCode === "404" || uploadError.message?.toLowerCase().includes("not found"))) {
+    await supabase.storage.createBucket(DIRECT_MESSAGE_ATTACHMENTS_BUCKET, { public: false });
+    ({ error: uploadError } = await supabase.storage
+      .from(DIRECT_MESSAGE_ATTACHMENTS_BUCKET)
+      .upload(path, file.buffer, { contentType: file.mimetype, upsert: false }));
+  }
+
   if (uploadError) {
     console.error("[DM attachment upload] Supabase upload error:", uploadError);
     throw httpError("Attachment upload failed. Please try again.", 502);
