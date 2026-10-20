@@ -77,6 +77,20 @@ model UserProfile {
   sentMessageRequests     MessageRequest[]        @relation("MessageRequestSender")
   receivedMessageRequests MessageRequest[]        @relation("MessageRequestReceiver")
 
+  // Project Message Relations
+  sentProjectMessages     ProjectMessage[]         @relation("ProjectMessageSender")
+  projectMessageReactions ProjectMessageReaction[] @relation("ProjectMessageReactionUser")
+  projectMessageReads     ProjectMessageRead[]     @relation("ProjectMessageReadUser")
+
+  // Project File Relations
+  uploadedProjectFiles        ProjectFile[]        @relation("ProjectFileUploader")
+  uploadedProjectFileVersions ProjectFileVersion[] @relation("ProjectFileVersionUploader")
+
+  // Project Task Relations
+  createdProjectTasks ProjectTask[]  @relation("ProjectTaskCreator")
+  taskAssignments     TaskAssignee[] @relation("TaskAssigneeUser")
+  taskComments        TaskComment[]  @relation("TaskCommentAuthor")
+
   // Endorsements
   givenEndorsements    Endorsement[] @relation("EndorsementSender")
   receivedEndorsements Endorsement[] @relation("EndorsementReceiver")

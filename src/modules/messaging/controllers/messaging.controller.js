@@ -1,4 +1,6 @@
 const messagingService = require("../services/messaging.service");
+const { uploadVoiceNote } = require("../services/voiceUpload.service");
+const { uploadDirectMessageAttachment } = require("../services/directMessageAttachments.service");
 
 const postMessageRequest = async (req, res) => {
   try {
@@ -52,10 +54,11 @@ const postDirectMessage = async (req, res) => {
   try {
     const senderId = req.user.id;
     const { chatId } = req.params;
-    const { content, parentId, voiceUrl, voiceDuration } = req.body;
+    const { content, parentId, voiceUrl, voiceDuration, attachments } = req.body;
 
-    if (!content && !voiceUrl) {
-      return res.status(400).json({ error: "Message content or voiceUrl is required." });
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!content && !voiceUrl && !hasAttachments) {
+      return res.status(400).json({ error: "Message content, voiceUrl, or attachments is required." });
     }
 
     const message = await messagingService.sendDirectMessage(senderId, chatId, {
@@ -63,6 +66,7 @@ const postDirectMessage = async (req, res) => {
       parentId,
       voiceUrl,
       voiceDuration,
+      attachments,
     });
     res.status(201).json(message);
   } catch (error) {
@@ -154,6 +158,35 @@ const deleteChatHandler = async (req, res) => {
 };
 
 
+const postDirectAttachmentUpload = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded. Include a file in the 'file' field." });
+    }
+    const result = await uploadDirectMessageAttachment(req.user.id, req.file);
+    return res.status(201).json(result);
+  } catch (error) {
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message, code: error.code });
+  }
+};
+
+const postVoiceUpload = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No audio file uploaded. Include a file in the 'voice' field." });
+    }
+    const { durationSeconds } = req.body || {};
+    const result = await uploadVoiceNote(req.user.id, req.file, { durationSeconds });
+    return res.status(201).json(result);
+  } catch (error) {
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message, code: error.code });
+  }
+};
+
 const postCreateChat = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -182,4 +215,6 @@ module.exports = {
   postMessageReaction,
   patchChatArchive,
   deleteChatHandler,
+  postVoiceUpload,
+  postDirectAttachmentUpload,
 };

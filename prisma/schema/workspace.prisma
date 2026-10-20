@@ -1,7 +1,14 @@
 enum TaskStatus {
   TODO
   IN_PROGRESS
-  COMPLETED
+  IN_REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 enum AgreementStatus {
@@ -10,37 +17,159 @@ enum AgreementStatus {
   SIGNED
 }
 
+enum ProjectMessageType {
+  TEXT
+  VOICE
+}
+
 model ProjectTask {
-  id          String     @id @default(cuid())
+  id          String         @id @default(cuid())
   projectId   String
+  createdById String?
   title       String
   description String?
-  status      TaskStatus @default(TODO)
+  status      TaskStatus     @default(TODO)
+  priority    TaskPriority   @default(MEDIUM)
   dueDate     DateTime?
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   UserProfile?   @relation("ProjectTaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  assignees   TaskAssignee[]
+  comments    TaskComment[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+}
+
+model TaskAssignee {
+  taskId     String
+  userId     String
+  assignedAt DateTime    @default(now())
+  task       ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       UserProfile @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+model TaskComment {
+  id        String        @id @default(cuid())
+  taskId    String
+  authorId  String?
+  content   String
+  parentId  String?
+  parent    TaskComment?  @relation("TaskCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies   TaskComment[] @relation("TaskCommentReplies")
+  task      ProjectTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    UserProfile?  @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([taskId])
+  @@index([parentId])
 }
 
 model ProjectFile {
-  id        String   @id @default(cuid())
-  projectId String
-  name      String
-  url       String
-  size      Int?
-  type      String?
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String                @id @default(cuid())
+  projectId        String
+  name             String
+  url              String
+  size             Int?
+  type             String?
+  durationSeconds  Int?
+  uploaderId       String?
+  currentVersionId String?               @unique
+  project          Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader         UserProfile?          @relation("ProjectFileUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  currentVersion   ProjectFileVersion?   @relation("ProjectFileCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions         ProjectFileVersion[]  @relation("ProjectFileVersions")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([projectId])
+}
+
+model ProjectFileVersion {
+  id              String       @id @default(cuid())
+  fileId          String
+  uploaderId      String?
+  versionNumber   Int
+  name            String
+  url             String
+  size            Int
+  type            String?
+  durationSeconds Int?
+  file            ProjectFile  @relation("ProjectFileVersions", fields: [fileId], references: [id], onDelete: Cascade)
+  uploader        UserProfile? @relation("ProjectFileVersionUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  currentOf       ProjectFile? @relation("ProjectFileCurrentVersion")
+  createdAt       DateTime     @default(now())
+
+  @@unique([fileId, versionNumber])
+  @@index([fileId])
 }
 
 model ProjectMessage {
-  id        String   @id @default(cuid())
-  projectId String
-  senderId  String
-  content   String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id            String                     @id @default(cuid())
+  projectId     String
+  senderId      String
+  content       String?
+  messageType   ProjectMessageType         @default(TEXT)
+  voiceUrl      String?
+  voiceDuration Int?
+  parentId      String?
+  parent        ProjectMessage?            @relation("ProjectMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies       ProjectMessage[]           @relation("ProjectMessageReplies")
+  project       Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sender        UserProfile                @relation("ProjectMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  attachments   ProjectMessageAttachment[]
+  reactions     ProjectMessageReaction[]
+  reads         ProjectMessageRead[]
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  @@index([projectId])
+  @@index([senderId])
+  @@index([parentId])
+}
+
+model ProjectMessageAttachment {
+  id        String         @id @default(cuid())
+  messageId String
+  url       String
+  name      String?
+  mimeType  String?
+  size      Int?
+  message   ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@index([messageId])
+}
+
+model ProjectMessageReaction {
+  id        String         @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  message   ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      UserProfile    @relation("ProjectMessageReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model ProjectMessageRead {
+  id        String         @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime       @default(now())
+  message   ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      UserProfile    @relation("ProjectMessageReadUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
 }
 
 model LegalAgreement {
