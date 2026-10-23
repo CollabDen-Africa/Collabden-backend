@@ -78,6 +78,9 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.PROJECT_APPLICATION_SUBMITTED,
     EVENT_TYPES.PROJECT_APPLICATION_STATUS_CHANGED,
     EVENT_TYPES.USER_MODERATED,
+    EVENT_TYPES.AGREEMENT_UPLOADED,
+    EVENT_TYPES.AGREEMENT_PENDING_SIGNATURE,
+    EVENT_TYPES.AGREEMENT_SIGNED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe:", err.message);
@@ -160,6 +163,18 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.USER_MODERATED:
           await handleUserModerated(payload);
+          break;
+
+        case EVENT_TYPES.AGREEMENT_UPLOADED:
+          await handleAgreementUploaded(payload);
+          break;
+
+        case EVENT_TYPES.AGREEMENT_PENDING_SIGNATURE:
+          await handleAgreementPendingSignature(payload);
+          break;
+
+        case EVENT_TYPES.AGREEMENT_SIGNED:
+          await handleAgreementSigned(payload);
           break;
 
         default:
@@ -785,6 +800,84 @@ const handleProjectDeleted = async ({ projectId, projectName, userId }) => {
   } catch (err) {
     console.error(`[Listener Error] Failed to notify collaborators on PROJECT_DELETED for ${projectId}:`, err.message);
   }
+};
+
+// Shared helper: fan out an in-app notification + WebSocket push to all active collaborators
+// and the project owner on a project.
+const fanOutProjectNotification = async ({ projectId, excludeUserId, title, message, type, link }) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      ownerId: true,
+      collaborators: {
+        where: { isActive: true },
+        select: { userId: true },
+      },
+    },
+  });
+
+  if (!project) return;
+
+  const recipientIds = new Set(project.collaborators.map(c => c.userId));
+  recipientIds.add(project.ownerId);
+  if (excludeUserId) recipientIds.delete(excludeUserId);
+
+  for (const recipientId of recipientIds) {
+    const canSendInApp = await shouldSend(recipientId, "inApp");
+    if (!canSendInApp) continue;
+
+    const notification = await createNotification({ userId: recipientId, title, message, type, link });
+    sendToUser(recipientId, { type: "NOTIFICATION", data: notification });
+  }
+};
+
+/**
+ * FR108: Handle AGREEMENT_UPLOADED event —
+ * notify all project collaborators that a new agreement has been added.
+ */
+const handleAgreementUploaded = async ({ projectId, projectName, agreementId, agreementTitle, uploaderId }) => {
+  console.log(`[Listener] Processing AGREEMENT_UPLOADED for project ${projectId}`);
+
+  await fanOutProjectNotification({
+    projectId,
+    excludeUserId: uploaderId,
+    title: "New Agreement Added",
+    message: `A new legal agreement "${agreementTitle || 'Untitled'}" has been added to "${projectName || 'your project'}".`,
+    type: "AGREEMENT_UPLOADED",
+    link: `/projects/${projectId}/agreements`,
+  });
+};
+
+/**
+ * FR108: Handle AGREEMENT_PENDING_SIGNATURE event —
+ * notify all collaborators that an agreement is ready for their signature.
+ */
+const handleAgreementPendingSignature = async ({ projectId, projectName, agreementId, agreementTitle }) => {
+  console.log(`[Listener] Processing AGREEMENT_PENDING_SIGNATURE for project ${projectId}`);
+
+  await fanOutProjectNotification({
+    projectId,
+    title: "Agreement Awaiting Signature",
+    message: `The agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}" is now pending your signature.`,
+    type: "AGREEMENT_PENDING_SIGNATURE",
+    link: `/projects/${projectId}/agreements/${agreementId}`,
+  });
+};
+
+/**
+ * FR108: Handle AGREEMENT_SIGNED event —
+ * notify all collaborators that the agreement has been fully signed.
+ */
+const handleAgreementSigned = async ({ projectId, projectName, agreementId, agreementTitle, signerName }) => {
+  console.log(`[Listener] Processing AGREEMENT_SIGNED for project ${projectId}`);
+
+  await fanOutProjectNotification({
+    projectId,
+    title: "Agreement Signed",
+    message: `${signerName || 'A collaborator'} has signed the agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}".`,
+    type: "AGREEMENT_SIGNED",
+    link: `/projects/${projectId}/agreements/${agreementId}`,
+  });
 };
 
 module.exports = { registerNotificationListeners };

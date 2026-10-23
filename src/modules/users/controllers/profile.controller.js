@@ -34,7 +34,7 @@ const updateProfile = async (req, res) => {
     ];
 
     // Strip any fields not in the allowed list (extra security layer on top of Zod)
-    const updateData = Object.fromEntries(
+    let updateData = Object.fromEntries(
       Object.entries(req.body).filter(([key]) => ALLOWED_FIELDS.includes(key))
     );
 
@@ -47,6 +47,15 @@ const updateProfile = async (req, res) => {
     const oldProfile = await prisma.userProfile.findUnique({
       where: { id: userId },
     });
+
+    // Lock firstName and lastName once identity is verified
+    if (oldProfile?.identityVerified) {
+      if (updateData.firstName !== undefined || updateData.lastName !== undefined) {
+        return res.status(403).json({
+          error: "First name and last name cannot be changed after identity verification.",
+        });
+      }
+    }
 
     if (!oldProfile) {
       return res.status(404).json({ error: "Profile not found" });
