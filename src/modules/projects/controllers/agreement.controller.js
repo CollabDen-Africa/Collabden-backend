@@ -7,6 +7,9 @@ const {
   editAgreementService,
   getUserAgreementsService,
   downloadAgreementService,
+  getAgreementPermissionsService,
+  updateAgreementPermissionService,
+  getUserAgreementActivityService,
 } = require('../services/agreement.service');
 
 const uploadAgreementHandler = async (req, res) => {
@@ -23,8 +26,7 @@ const uploadAgreementHandler = async (req, res) => {
     return res.status(201).json({ agreement });
   } catch (error) {
     console.error('Error in uploadAgreementHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
@@ -35,8 +37,7 @@ const getAgreementsHandler = async (req, res) => {
     return res.status(200).json({ agreements });
   } catch (error) {
     console.error('Error in getAgreementsHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
@@ -54,8 +55,7 @@ const updateAgreementStatusHandler = async (req, res) => {
     return res.status(200).json({ agreement });
   } catch (error) {
     console.error('Error in updateAgreementStatusHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
@@ -73,8 +73,7 @@ const uploadSignedAgreementHandler = async (req, res) => {
     return res.status(200).json({ agreement });
   } catch (error) {
     console.error('Error in uploadSignedAgreementHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
@@ -88,8 +87,7 @@ const esignAgreementHandler = async (req, res) => {
     return res.status(200).json({ message: 'Agreement successfully e-signed.', agreement });
   } catch (error) {
     console.error('Error in esignAgreementHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
@@ -104,22 +102,18 @@ const editAgreementHandler = async (req, res) => {
     return res.status(200).json({ message: 'Agreement updated successfully.', agreement });
   } catch (error) {
     console.error('Error in editAgreementHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
 const getUserAgreementsHandler = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { page = 1, limit = 10 } = req.query;
-
-    const result = await getUserAgreementsService(userId, page, limit);
+    const result = await getUserAgreementsService(userId, req.query);
     return res.status(200).json(result);
   } catch (error) {
     console.error('Error in getUserAgreementsHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
@@ -136,14 +130,59 @@ const downloadAgreementHandler = async (req, res) => {
     return res.send(buffer);
   } catch (error) {
     console.error('Error in downloadAgreementHandler:', error);
-    const status = error.status || 500;
-    return res.status(status).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
+// FR96: get permission records for an agreement (owner only)
+const getAgreementPermissionsHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requesterId = req.user.id;
+
+    const permissions = await getAgreementPermissionsService(id, requesterId);
+    return res.status(200).json({ permissions });
+  } catch (error) {
+    console.error('Error in getAgreementPermissionsHandler:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
+// FR96: upsert a collaborator's permission record (owner only)
+const updateAgreementPermissionHandler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requesterId = req.user.id;
+    const { userId: targetUserId, canView, canSign, canEdit } = req.body;
+
+    if (!targetUserId) {
+      return res.status(400).json({ error: 'userId of the target collaborator is required.' });
+    }
+
+    const permission = await updateAgreementPermissionService(
+      id, requesterId, targetUserId, { canView, canSign, canEdit }
+    );
+    return res.status(200).json({ message: 'Permission updated.', permission });
+  } catch (error) {
+    console.error('Error in updateAgreementPermissionHandler:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
+// FR109: user's personal agreement activity history
+const getUserAgreementActivityHandler = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await getUserAgreementActivityService(userId, req.query);
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in getUserAgreementActivityHandler:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
   }
 };
 
 module.exports = {
   uploadAgreementHandler,
-  getAgreementsService,
   getAgreementsHandler,
   updateAgreementStatusHandler,
   uploadSignedAgreementHandler,
@@ -151,4 +190,7 @@ module.exports = {
   editAgreementHandler,
   getUserAgreementsHandler,
   downloadAgreementHandler,
+  getAgreementPermissionsHandler,
+  updateAgreementPermissionHandler,
+  getUserAgreementActivityHandler,
 };

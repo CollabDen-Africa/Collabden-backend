@@ -15,6 +15,7 @@ enum AgreementStatus {
   DRAFT
   PENDING_SIGNATURE
   SIGNED
+  EXPIRED
 }
 
 enum ProjectMessageType {
@@ -173,21 +174,40 @@ model ProjectMessageRead {
 }
 
 model LegalAgreement {
-  id            String               @id @default(cuid())
+  id            String                @id @default(cuid())
   projectId     String
   title         String?
   content       String?
   fileUrl       String?
   filePath      String?
-  status        AgreementStatus      @default(DRAFT)
+  status        AgreementStatus       @default(DRAFT)
+  expiresAt     DateTime?
   auditMetadata Json?
-  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  project       Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   signatures    AgreementSignature[]
+  permissions   AgreementPermission[]
   escrows       Escrow[]
   reports       Report[]
   adminNotes    AdminNote[]
+}
+
+model AgreementPermission {
+  id          String         @id @default(cuid())
+  agreementId String
+  userId      String
+  canView     Boolean        @default(true)
+  canSign     Boolean        @default(true)
+  canEdit     Boolean        @default(false)
+  agreement   LegalAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  user        UserProfile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([agreementId, userId])
+  @@index([agreementId])
+  @@index([userId])
 }
 
 model AgreementSignature {

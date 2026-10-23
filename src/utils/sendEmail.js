@@ -10,14 +10,14 @@ const getRecipient = (to) => {
   return to;
 };
 
-const sendEmail = async ({ to, subject, text, html }) => {
+const sendEmail = async ({ to, subject, text, html, attachments }) => {
   try {
     const recipient = getRecipient(to);
     if (recipient !== to) {
       console.log(`Development email redirect: ${to} -> ${recipient}`);
     }
 
-    const { data, error } = await resend.emails.send({
+    const payload = {
       // Resend requires the 'from' address to be 'onboarding@resend.dev' if your domain is unverified.
       // You can only send to the email address you registered your Resend account with during testing.
       from: process.env.EMAIL_FROM || "Collabden <onboarding@resend.dev>",
@@ -25,7 +25,13 @@ const sendEmail = async ({ to, subject, text, html }) => {
       subject,
       text,
       html,
-    });
+    };
+
+    if (attachments && attachments.length > 0) {
+      payload.attachments = attachments;
+    }
+
+    const { data, error } = await resend.emails.send(payload);
 
     if (error) {
       console.error("Email error:", error);

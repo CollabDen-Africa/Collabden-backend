@@ -3,7 +3,7 @@ const userAuthRoutes = require('./userAuth.route')
 const connectionRoutes = require('./connection.route')
 const userAgreementsRoutes = require('./userAgreements.route')
 const userSecurityRoutes = require("./security.route");
-const userPersonaRoutes = require("./persona.route");
+const userKycRoutes = require("./kyc.route");
 const userProfileRoutes = require("./profile.route");
 const collaboratorRoutes = require("./collaborator.route");
 const router = Router()
@@ -14,7 +14,7 @@ router.use('/connections', connectionRoutes)
 router.use('/agreements', userAgreementsRoutes)
 router.use("/profile", userProfileRoutes);
 router.use("/security", userSecurityRoutes);
-router.use("/persona", userPersonaRoutes);
+router.use("/kyc", userKycRoutes);
 router.use("/collaborators", collaboratorRoutes);
 
 

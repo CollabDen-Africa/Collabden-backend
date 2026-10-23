@@ -134,6 +134,9 @@ model UserProfile {
   sentDisputeMessages     DisputeMessage[]
   disputeAuditLogs        DisputeAuditLog[]
 
+  // Agreement Permissions
+  agreementPermissions AgreementPermission[]
+
   // Project Applications
   applications        ProjectApplication[]
   sentAppMessages     ApplicationMessage[]
