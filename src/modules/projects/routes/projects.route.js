@@ -39,6 +39,7 @@ const {
   uploadProjectCover,
   getRoyaltySplits,
   updateRoyaltySplits,
+  saveProjectFileToSpace,
 } = require("../controllers/projects.controller");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const {
@@ -359,6 +360,33 @@ router.get("/:id/files/:fileId/stream", streamProjectFile);
  *         description: Signed download URL returned
  */
 router.get("/:id/files/:fileId/download", downloadProjectFile);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/files/{fileId}/save-to-space:
+ *   post:
+ *     summary: Save a project file to the authenticated user's personal "My Space"
+ *     description: >
+ *       Creates a reference (no byte copy) from the user to this project file so it
+ *       appears in `GET /api/v1/user/space`. Idempotent — re-posting the same file is a no-op.
+ *       Requires the user to be project owner or an active collaborator.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       201:
+ *         description: File saved to the user's space.
+ */
+router.post("/:id/files/:fileId/save-to-space", saveProjectFileToSpace);
 
 /**
  * @swagger

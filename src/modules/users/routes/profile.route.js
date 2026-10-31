@@ -10,6 +10,8 @@ const {
   addEndorsementSchema,
   updatePortfolioSchema,
   projectEndorsementSchema,
+  addBackupEmailSchema,
+  verifyBackupEmailSchema,
 } = require("../../../schemas/profile.schema");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const { avatarUpload } = require("../../../middleware/avatarUpload.middleware");
@@ -195,6 +197,82 @@ router.post(
  *         description: Avatar updated
  */
 router.patch("/avatar", authMiddleware, validateRequest(updateAvatarSchema), profileController.updateAvatar);
+
+/**
+ * @swagger
+ * /api/v1/user/profile/backup-email:
+ *   post:
+ *     summary: Add or replace backup email
+ *     description: Saves the new backup email and sends a 6-digit OTP to it for verification. The address is not active until verified.
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [backupEmail]
+ *             properties:
+ *               backupEmail:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Verification code sent to backup email
+ *       400:
+ *         description: Invalid email or same as primary email
+ *       409:
+ *         description: Email already in use by another account
+ */
+router.post("/backup-email", authMiddleware, validateRequest(addBackupEmailSchema), profileController.addBackupEmail);
+
+/**
+ * @swagger
+ * /api/v1/user/profile/backup-email/verify:
+ *   post:
+ *     summary: Verify backup email OTP
+ *     description: Confirms the backup email using the 6-digit code that was sent to it.
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: 6-digit numeric OTP sent to the backup email
+ *     responses:
+ *       200:
+ *         description: Backup email verified successfully
+ *       400:
+ *         description: Invalid or expired code
+ *       409:
+ *         description: Backup email already verified
+ */
+router.post("/backup-email/verify", authMiddleware, validateRequest(verifyBackupEmailSchema), profileController.verifyBackupEmail);
+
+/**
+ * @swagger
+ * /api/v1/user/profile/backup-email:
+ *   delete:
+ *     summary: Remove backup email
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Backup email removed
+ *       400:
+ *         description: No backup email on this account
+ */
+router.delete("/backup-email", authMiddleware, profileController.removeBackupEmail);
 
 /**
  * @swagger

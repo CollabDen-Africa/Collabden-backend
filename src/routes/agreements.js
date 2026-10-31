@@ -581,25 +581,32 @@ router.patch(
  * @swagger
  * /api/v1/projects/{projectId}/agreements/{id}/sign:
  *   post:
- *     summary: Upload a physically signed agreement copy to lock it as SIGNED
+ *     summary: Upload a physically signed agreement copy (contributes one signature)
  *     description: >
  *       Use this when a collaborator has physically signed the document (e.g.
  *       printed, signed, and scanned it). Uploading the signed copy atomically:
  *       1. Replaces the stored file with the signed version.
- *       2. Sets status to **SIGNED** (locked — no further edits possible).
- *       3. Creates an `AgreementSignature` record using the caller's verified legal name.
- *       4. Emails a copy of the signed PDF to all project collaborators.
- *       5. Fires an in-app notification to all collaborators.
+ *       2. Creates an `AgreementSignature` record using the caller's verified legal name.
+ *       3. Recomputes the required-signer set (project owner + every active, ACCEPTED
+ *          collaborator) and compares it to signatures recorded so far.
+ *       4. If every required signer has now signed, flips status to **SIGNED**
+ *          (locked — no further edits or file replacements), emails a copy of the
+ *          signed PDF to all collaborators, and fires the `AGREEMENT_SIGNED` event.
+ *          Otherwise status stays **PENDING_SIGNATURE** and only an activity-log
+ *          entry (`AGREEMENT_SIGNATURE_ADDED`) is written — no completion email.
  *
  *
  *       **Who can call this:** Any active project collaborator whose account has:
  *       - Identity verified (`identityVerified: true`) via government ID / NIN.
  *       - A `legalName` set on their profile.
+ *       - Not already signed this agreement.
  *       - `canSign: true` on their `AgreementPermission` record for this agreement
  *         (if no record exists, signing is allowed by default).
  *
  *
- *       If the agreement is already SIGNED this call returns 400.
+ *       Once the agreement is SIGNED further calls return 400. The stored file is
+ *       preserved across intermediate signatures — editing or replacing it is
+ *       blocked by `editAgreement` as soon as any signature exists.
  *     tags: [Agreements]
  *     security:
  *       - bearerAuth: []
@@ -632,7 +639,9 @@ router.patch(
  *     responses:
  *       200:
  *         description: >
- *           Signed agreement uploaded, status set to SIGNED, collaborators notified.
+ *           Signature recorded. If this was the final required signer, status is now
+ *           SIGNED and collaborators have been notified; otherwise status remains
+ *           PENDING_SIGNATURE until the remaining signers sign.
  *         content:
  *           application/json:
  *             schema:
@@ -641,13 +650,20 @@ router.patch(
  *                 agreement:
  *                   $ref: '#/components/schemas/Agreement'
  *       400:
- *         description: Agreement is already SIGNED.
+ *         description: Agreement already SIGNED or caller has already signed.
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               error: "Agreement is already signed and locked."
+ *             examples:
+ *               alreadyLocked:
+ *                 summary: Agreement already fully signed
+ *                 value:
+ *                   error: "Agreement is already signed and locked."
+ *               userAlreadySigned:
+ *                 summary: Caller already signed
+ *                 value:
+ *                   error: "You have already signed this agreement."
  *       403:
  *         description: >
  *           Caller has not completed identity verification or does not have
@@ -688,9 +704,20 @@ router.post(
  *       The platform uses the caller's verified `legalName` as the signature.
  *       Signing atomically:
  *       1. Creates an `AgreementSignature` record.
- *       2. Sets status to **SIGNED** (locked).
- *       3. Emails a copy of the signed PDF to all project collaborators.
- *       4. Fires an in-app notification to all collaborators.
+ *       2. Recomputes the required-signer set (project owner + every active,
+ *          ACCEPTED collaborator) against the signatures recorded so far.
+ *       3. If every required signer has now signed, flips status to **SIGNED**
+ *          (locked), emails a copy of the signed PDF to all collaborators, and
+ *          fires the `AGREEMENT_SIGNED` event. Otherwise status stays
+ *          **PENDING_SIGNATURE** and only an activity-log entry
+ *          (`AGREEMENT_SIGNATURE_ADDED`) is written — no completion email.
+ *
+ *
+ *       Adding a new collaborator to the project while status is
+ *       PENDING_SIGNATURE automatically adds them to the required-signer set, so
+ *       the agreement will not lock until they also sign. Collaborators added
+ *       after the agreement is already SIGNED are not retroactively required —
+ *       issue a new agreement for them.
  *
  *
  *       **UI note:** Show the caller's `legalName` in a preview before they
@@ -736,8 +763,10 @@ router.post(
  *     responses:
  *       200:
  *         description: >
- *           Agreement successfully e-signed. Status is now SIGNED.
- *           Collaborators have been notified via email and in-app notification.
+ *           Signature recorded. If this was the final required signer, status is
+ *           now SIGNED and collaborators have been notified via email and in-app
+ *           notification; otherwise status remains PENDING_SIGNATURE until the
+ *           remaining signers sign.
  *         content:
  *           application/json:
  *             schema:

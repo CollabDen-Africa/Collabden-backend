@@ -1,8 +1,11 @@
 const prisma = require('../../../config/prismaClient');
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const path = require("path");
 const sharp = require("sharp");
 const supabase = require("../../../config/supabase");
+const { sendEmail } = require("../../../utils/sendEmail");
+const { getBackupEmailVerificationTemplate } = require("../../../utils/emailTemplates");
 const AVATAR_BUCKET = "user-avatars";
 
 /**
@@ -635,6 +638,145 @@ const browseCollaborators = async (req, res) => {
   }
 };
 
+/**
+ * Add or replace the backup email for the authenticated user.
+ * Sends a 6-digit OTP to the new address; the address is not marked verified yet.
+ */
+const addBackupEmail = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { backupEmail } = req.body;
+    const normalized = backupEmail.toLowerCase();
+
+    const user = await prisma.userProfile.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (normalized === user.email) {
+      return res.status(400).json({ error: "Backup email cannot be the same as your primary email" });
+    }
+
+    // Make sure this address isn't already the primary or backup email of another account
+    const taken = await prisma.userProfile.findFirst({
+      where: {
+        OR: [{ email: normalized }, { backupEmail: normalized }],
+        NOT: { id: userId },
+      },
+    });
+    console.log("taken", taken);
+    if (taken) {
+      return res.status(409).json({ error: "This email is already associated with another account" });
+    }
+
+    const token = crypto.randomInt(100000, 999999).toString();
+
+    await prisma.userProfile.update({
+      where: { id: userId },
+      data: {
+        backupEmail: normalized,
+        backupEmailVerified: false,
+        backupEmailToken: token,
+        backupEmailTokenExpiry: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+    console.log("before email")
+
+    const emailTemplate = getBackupEmailVerificationTemplate(token);
+    await sendEmail({
+      to: normalized,
+      subject: "Verify your CollabDen backup email",
+      text: emailTemplate.text,
+      html: emailTemplate.html,
+    });
+
+    await prisma.auditLog.create({
+      data: { userId, action: "BACKUP_EMAIL_ADDED", changes: { backupEmail: normalized } },
+    });
+
+    return res.status(200).json({ message: "Verification code sent to your backup email" });
+  } catch (error) {
+    console.error("Error adding backup email:", error);
+    res.status(500).json({ error: "Failed to add backup email" });
+  }
+};
+
+/**
+ * Verify the backup email OTP sent during addBackupEmail.
+ */
+const verifyBackupEmail = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { token } = req.body;
+
+    const user = await prisma.userProfile.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (!user.backupEmail || !user.backupEmailToken) {
+      return res.status(400).json({ error: "No pending backup email verification" });
+    }
+    if (user.backupEmailVerified) {
+      return res.status(409).json({ error: "Backup email is already verified" });
+    }
+    if (user.backupEmailToken !== token) {
+      return res.status(400).json({ error: "Invalid verification code" });
+    }
+    if (user.backupEmailTokenExpiry && new Date() > user.backupEmailTokenExpiry) {
+      return res.status(400).json({ error: "Verification code has expired" });
+    }
+
+    await prisma.userProfile.update({
+      where: { id: userId },
+      data: {
+        backupEmailVerified: true,
+        backupEmailToken: null,
+        backupEmailTokenExpiry: null,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: { userId, action: "BACKUP_EMAIL_VERIFIED", changes: { backupEmail: user.backupEmail } },
+    });
+
+    return res.status(200).json({ message: "Backup email verified successfully" });
+  } catch (error) {
+    console.error("Error verifying backup email:", error);
+    res.status(500).json({ error: "Failed to verify backup email" });
+  }
+};
+
+/**
+ * Remove the backup email from the authenticated user's account.
+ */
+const removeBackupEmail = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await prisma.userProfile.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.backupEmail) {
+      return res.status(400).json({ error: "No backup email to remove" });
+    }
+
+    await prisma.userProfile.update({
+      where: { id: userId },
+      data: {
+        backupEmail: null,
+        backupEmailVerified: false,
+        backupEmailToken: null,
+        backupEmailTokenExpiry: null,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: { userId, action: "BACKUP_EMAIL_REMOVED", changes: { backupEmail: user.backupEmail } },
+    });
+
+    return res.status(200).json({ message: "Backup email removed successfully" });
+  } catch (error) {
+    console.error("Error removing backup email:", error);
+    res.status(500).json({ error: "Failed to remove backup email" });
+  }
+};
+
 module.exports = {
   updateProfile,
   updateEmail,
@@ -649,5 +791,8 @@ module.exports = {
   addProjectEndorsement,
   getProfileCompleteness,
   browseCollaborators,
+  addBackupEmail,
+  verifyBackupEmail,
+  removeBackupEmail,
 };
 

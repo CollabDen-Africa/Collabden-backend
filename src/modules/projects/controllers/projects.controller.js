@@ -42,6 +42,7 @@ const {
   downloadProjectFile: downloadProjectFileService,
   deleteProjectFileVersion: deleteProjectFileVersionService,
   deleteProjectFile: deleteProjectFileService,
+  saveProjectFileToSpace: saveProjectFileToSpaceService,
   getProjectStorageUsage: getProjectStorageUsageService,
 } = require("../services/projectFiles.service");
 const {
@@ -604,6 +605,17 @@ const getRoyaltySplits = async (req, res) => {
   }
 };
 
+const saveProjectFileToSpace = async (req, res) => {
+  try {
+    const { id: projectId, fileId } = req.params;
+    const userId = req.user.id;
+    const saved = await saveProjectFileToSpaceService(projectId, fileId, userId);
+    res.status(201).json({ message: "File saved to your space.", savedFile: saved });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 const updateRoyaltySplits = async (req, res) => {
   try {
     const { id: projectId } = req.params;
@@ -655,4 +667,5 @@ module.exports = {
   uploadProjectCover,
   getRoyaltySplits,
   updateRoyaltySplits,
+  saveProjectFileToSpace,
 };
