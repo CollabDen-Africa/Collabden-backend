@@ -27,6 +27,8 @@ model UserProfile {
   googleId                String?               @unique
   isVerified              Boolean               @default(false)
   identityVerified        Boolean               @default(false)
+  ninHash                 String?               @unique
+  identityVerifiedAt      DateTime?
   legalName               String?
   displayName             String?
   firstName               String?
@@ -50,6 +52,10 @@ model UserProfile {
   verificationTokenExpiry DateTime?
   resetToken              String?               @unique
   resetTokenExpiry        DateTime?
+  backupEmail             String?               @unique
+  backupEmailVerified     Boolean               @default(false)
+  backupEmailToken        String?               @unique
+  backupEmailTokenExpiry  DateTime?
   onboardingCompleted     Boolean               @default(false)
   tier                    SubscriptionTier      @default(BASIC)
   twoFactorSecret         String?
@@ -85,6 +91,7 @@ model UserProfile {
   // Project File Relations
   uploadedProjectFiles        ProjectFile[]        @relation("ProjectFileUploader")
   uploadedProjectFileVersions ProjectFileVersion[] @relation("ProjectFileVersionUploader")
+  savedFiles                  UserSavedFile[]      @relation("UserSavedFiles")
 
   // Project Task Relations
   createdProjectTasks ProjectTask[]  @relation("ProjectTaskCreator")
