@@ -73,6 +73,17 @@ const projectEndorsementSchema = z.object({
   content: z.string().min(10, "Endorsement must be at least 10 characters"),
 });
 
+const addBackupEmailSchema = z.object({
+  backupEmail: z.string().email("Must be a valid email address"),
+});
+
+const verifyBackupEmailSchema = z.object({
+  token: z
+    .string()
+    .length(6, "Verification code must be 6 digits")
+    .regex(/^\d{6}$/, "Verification code must be numeric"),
+});
+
 module.exports = {
   updateProfileSchema,
   updateEmailSchema,
@@ -82,4 +93,6 @@ module.exports = {
   addEndorsementSchema,
   updatePortfolioSchema,
   projectEndorsementSchema,
+  addBackupEmailSchema,
+  verifyBackupEmailSchema,
 };

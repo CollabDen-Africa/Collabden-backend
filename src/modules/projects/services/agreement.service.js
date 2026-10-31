@@ -24,6 +24,22 @@ async function getAgreementAttachment(filePath, title) {
   }
 }
 
+async function getRequiredSignerIds(projectId) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      ownerId: true,
+      collaborators: {
+        where: { isActive: true, inviteStatus: 'ACCEPTED' },
+        select: { userId: true },
+      },
+    },
+  });
+  if (!project) return [];
+  const ids = new Set([project.ownerId, ...project.collaborators.map(c => c.userId)]);
+  return [...ids];
+}
+
 async function notifyCollaborators(projectId, agreementTitle, filePath) {
   const collaborators = await prisma.projectCollaborator.findMany({
     where: { projectId, isActive: true },
@@ -179,7 +195,11 @@ const updateAgreementStatusService = async (id, status, userId) => {
 const uploadSignedAgreementService = async (id, file, userId) => {
   const agreement = await prisma.legalAgreement.findUnique({
     where: { id },
-    include: { project: { select: { ownerId: true, name: true } }, permissions: true },
+    include: {
+      project: { select: { ownerId: true, name: true } },
+      permissions: true,
+      signatures: true,
+    },
   });
 
   if (!agreement) {
@@ -209,46 +229,61 @@ const uploadSignedAgreementService = async (id, file, userId) => {
     throw error;
   }
 
+  if (agreement.signatures.some(sig => sig.userId === userId)) {
+    const error = new Error('You have already signed this agreement.');
+    error.status = 400;
+    throw error;
+  }
+
   const uploadResult = await uploadToSupabase(file, agreement.projectId, userId);
   const { fileUrl, filePath } = uploadResult;
+
+  await prisma.agreementSignature.create({
+    data: { agreementId: id, userId, legalName: user.legalName }
+  });
+
+  const requiredSignerIds = await getRequiredSignerIds(agreement.projectId);
+  const signedUserIds = new Set([...agreement.signatures.map(s => s.userId), userId]);
+  const allSigned = requiredSignerIds.length > 0 && requiredSignerIds.every(uid => signedUserIds.has(uid));
 
   const updatedAgreement = await prisma.legalAgreement.update({
     where: { id },
     data: {
       fileUrl,
       filePath,
-      status: 'SIGNED',
-      auditMetadata: {
-        lockedAt: new Date().toISOString(),
-        actionType: 'upload_signed_document',
-        signerName: user.legalName,
-        signerId: userId,
-        projectId: agreement.projectId
-      }
+      status: allSigned ? 'SIGNED' : 'PENDING_SIGNATURE',
+      ...(allSigned && {
+        auditMetadata: {
+          lockedAt: new Date().toISOString(),
+          actionType: 'upload_signed_document',
+          signerName: user.legalName,
+          signerId: userId,
+          projectId: agreement.projectId,
+        },
+      }),
     },
-  });
-
-  await prisma.agreementSignature.create({
-    data: { agreementId: id, userId, legalName: user.legalName }
   });
 
   await prisma.activityLog.create({
     data: {
       projectId: agreement.projectId,
-      action: 'AGREEMENT_SIGNED',
-      details: `Signed agreement document "${agreement.title || 'Untitled'}" was uploaded by ${user.legalName}.`,
+      action: allSigned ? 'AGREEMENT_SIGNED' : 'AGREEMENT_SIGNATURE_ADDED',
+      details: allSigned
+        ? `Agreement "${agreement.title || 'Untitled'}" is fully signed and locked. Final signer: ${user.legalName}.`
+        : `Signed agreement document "${agreement.title || 'Untitled'}" was uploaded by ${user.legalName}. Awaiting remaining signatures.`,
     }
   });
 
-  await notifyCollaborators(agreement.projectId, agreement.title || 'Untitled', filePath);
-
-  await publishEvent(EVENT_TYPES.AGREEMENT_SIGNED, {
-    projectId: agreement.projectId,
-    projectName: agreement.project.name,
-    agreementId: id,
-    agreementTitle: agreement.title,
-    signerName: user.legalName,
-  });
+  if (allSigned) {
+    await notifyCollaborators(agreement.projectId, agreement.title || 'Untitled', filePath);
+    await publishEvent(EVENT_TYPES.AGREEMENT_SIGNED, {
+      projectId: agreement.projectId,
+      projectName: agreement.project.name,
+      agreementId: id,
+      agreementTitle: agreement.title,
+      signerName: user.legalName,
+    });
+  }
 
   return updatedAgreement;
 };
@@ -312,17 +347,23 @@ const esignAgreementService = async (id, userId, intentToSign) => {
     data: { agreementId: id, userId, legalName: user.legalName }
   });
 
+  const requiredSignerIds = await getRequiredSignerIds(agreement.projectId);
+  const signedUserIds = new Set([...agreement.signatures.map(s => s.userId), userId]);
+  const allSigned = requiredSignerIds.length > 0 && requiredSignerIds.every(uid => signedUserIds.has(uid));
+
   const updatedAgreement = await prisma.legalAgreement.update({
     where: { id },
     data: {
-      status: 'SIGNED',
-      auditMetadata: {
-        lockedAt: new Date().toISOString(),
-        actionType: 'electronic_signature',
-        signerName: user.legalName,
-        signerId: userId,
-        projectId: agreement.projectId
-      }
+      status: allSigned ? 'SIGNED' : 'PENDING_SIGNATURE',
+      ...(allSigned && {
+        auditMetadata: {
+          lockedAt: new Date().toISOString(),
+          actionType: 'electronic_signature',
+          signerName: user.legalName,
+          signerId: userId,
+          projectId: agreement.projectId,
+        },
+      }),
     },
     include: { signatures: true },
   });
@@ -330,20 +371,23 @@ const esignAgreementService = async (id, userId, intentToSign) => {
   await prisma.activityLog.create({
     data: {
       projectId: agreement.projectId,
-      action: 'AGREEMENT_SIGNED',
-      details: `Agreement "${agreement.title || 'Untitled'}" was electronically signed by ${user.legalName}.`,
+      action: allSigned ? 'AGREEMENT_SIGNED' : 'AGREEMENT_SIGNATURE_ADDED',
+      details: allSigned
+        ? `Agreement "${agreement.title || 'Untitled'}" is fully signed and locked. Final signer: ${user.legalName}.`
+        : `Agreement "${agreement.title || 'Untitled'}" was electronically signed by ${user.legalName}. Awaiting remaining signatures.`,
     }
   });
 
-  await notifyCollaborators(agreement.projectId, agreement.title || 'Untitled', agreement.filePath);
-
-  await publishEvent(EVENT_TYPES.AGREEMENT_SIGNED, {
-    projectId: agreement.projectId,
-    projectName: agreement.project.name,
-    agreementId: id,
-    agreementTitle: agreement.title,
-    signerName: user.legalName,
-  });
+  if (allSigned) {
+    await notifyCollaborators(agreement.projectId, agreement.title || 'Untitled', agreement.filePath);
+    await publishEvent(EVENT_TYPES.AGREEMENT_SIGNED, {
+      projectId: agreement.projectId,
+      projectName: agreement.project.name,
+      agreementId: id,
+      agreementTitle: agreement.title,
+      signerName: user.legalName,
+    });
+  }
 
   return updatedAgreement;
 };
@@ -354,6 +398,7 @@ const editAgreementService = async (id, file, updateData, userId) => {
     include: {
       project: { select: { ownerId: true } },
       permissions: true,
+      signatures: { select: { id: true } },
     }
   });
 
@@ -369,6 +414,8 @@ const editAgreementService = async (id, file, updateData, userId) => {
     throw error;
   }
 
+  const hasExistingSignatures = agreement.signatures.length > 0;
+
   const isOwner = agreement.project.ownerId === userId;
   const permission = agreement.permissions.find(p => p.userId === userId);
   const hasEditAccess = permission ? permission.canEdit : isOwner;
@@ -381,7 +428,14 @@ const editAgreementService = async (id, file, updateData, userId) => {
 
   const dataToUpdate = {};
   if (updateData.title) dataToUpdate.title = updateData.title;
-  if (updateData.content) dataToUpdate.content = updateData.content;
+  if (updateData.content) {
+    if (hasExistingSignatures) {
+      const error = new Error('Cannot modify agreement content after it has been signed by any collaborator. Create a new agreement instead.');
+      error.status = 400;
+      throw error;
+    }
+    dataToUpdate.content = updateData.content;
+  }
   if (updateData.expiresAt) dataToUpdate.expiresAt = new Date(updateData.expiresAt);
   if (updateData.status) {
     if (updateData.status === 'SIGNED') {
@@ -393,6 +447,11 @@ const editAgreementService = async (id, file, updateData, userId) => {
   }
 
   if (file) {
+    if (hasExistingSignatures) {
+      const error = new Error('Cannot replace the agreement document after it has been signed by any collaborator. Create a new agreement instead.');
+      error.status = 400;
+      throw error;
+    }
     const uploadResult = await uploadToSupabase(file, agreement.projectId, userId);
     dataToUpdate.fileUrl = uploadResult.fileUrl;
     dataToUpdate.filePath = uploadResult.filePath;

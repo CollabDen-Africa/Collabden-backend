@@ -680,6 +680,41 @@ const getWithdrawalFailedEmailTemplate = ({ amount, reference, reason }) => {
   };
 };
 
+const getBackupEmailVerificationTemplate = (token) => {
+  const content = `
+    <h2 style="color: #204f99;">Verify Your Backup Email</h2>
+
+    <p>Hi there,</p>
+
+    <p>You've added a backup email address to your CollabDen account. Enter the code below to confirm it.</p>
+
+    <div class="otp-container">
+      <div class="otp-label">Your verification code</div>
+      <div class="otp-code">${token}</div>
+    </div>
+    <div class="expiry-note">
+      ⏱ This code expires in <strong>15 minutes</strong>.
+    </div>
+
+    <div class="divider"></div>
+
+    <p>If you didn't add a backup email to your CollabDen account, you can safely ignore this email.</p>
+
+    <p>
+      Best regards,<br>
+      <strong>The CollabDen Team</strong>
+    </p>
+  `;
+
+  return {
+    html: getBaseEmailLayout({
+      headerTitle: "Backup Email Verification",
+      content,
+    }),
+    text: `Your CollabDen backup email verification code is: ${token}\n\nThis code expires in 15 minutes.`,
+  };
+};
+
 const getAdmin2FAEmailTemplate = (code) => {
   const content = `
     <h2 style="color: #1a3f7a;">Login Attempt Detected</h2>
@@ -729,4 +764,5 @@ module.exports = {
   getWithdrawalCompletedEmailTemplate,
   getWithdrawalFailedEmailTemplate,
   getAdmin2FAEmailTemplate,
+  getBackupEmailVerificationTemplate,
 };

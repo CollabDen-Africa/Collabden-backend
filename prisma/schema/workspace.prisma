@@ -86,10 +86,24 @@ model ProjectFile {
   uploader         UserProfile?          @relation("ProjectFileUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
   currentVersion   ProjectFileVersion?   @relation("ProjectFileCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   versions         ProjectFileVersion[]  @relation("ProjectFileVersions")
+  savedBy          UserSavedFile[]       @relation("ProjectFileSavedBy")
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 
   @@index([projectId])
+}
+
+model UserSavedFile {
+  id            String       @id @default(cuid())
+  userId        String
+  projectFileId String
+  savedAt       DateTime     @default(now())
+  user          UserProfile  @relation("UserSavedFiles", fields: [userId], references: [id], onDelete: Cascade)
+  projectFile   ProjectFile  @relation("ProjectFileSavedBy", fields: [projectFileId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectFileId])
+  @@index([userId])
+  @@index([projectFileId])
 }
 
 model ProjectFileVersion {

@@ -5,7 +5,7 @@
 const sanitizeUser = (user) => {
   if (!user) return null;
 
-  const { password, verificationToken, ...sanitizedUser } = user;
+  const { password, verificationToken, resetToken, backupEmailToken, ...sanitizedUser } = user;
   return sanitizedUser;
 };
 

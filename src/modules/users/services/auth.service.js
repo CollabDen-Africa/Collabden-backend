@@ -338,13 +338,23 @@ const resendVerificationEmailService = async (email) => {
 const forgotPasswordService = async (email, ipAddress, userAgent) => {
   const normalizedEmail = email?.toLowerCase();
 
-  const user = await prisma.userProfile.findUnique({
+  // Accept both primary email and a verified backup email
+  let user = await prisma.userProfile.findUnique({
     where: { email: normalizedEmail },
   });
 
   if (!user) {
+    user = await prisma.userProfile.findFirst({
+      where: { backupEmail: normalizedEmail, backupEmailVerified: true },
+    });
+  }
+
+  if (!user) {
     throw new Error("User with this email not found");
   }
+
+  // Always send the reset link to the primary email for security
+  const deliveryEmail = user.email;
 
   // Generate reset token
   const resetToken = crypto.randomBytes(32).toString("hex");
@@ -363,7 +373,7 @@ const forgotPasswordService = async (email, ipAddress, userAgent) => {
   // Send reset email
   const emailTemplate = getPasswordResetEmailTemplate(resetToken);
   await sendEmail({
-    to: normalizedEmail,
+    to: deliveryEmail,
     subject: "Password Reset Request - CollabDen",
     text: emailTemplate.text,
     html: emailTemplate.html,

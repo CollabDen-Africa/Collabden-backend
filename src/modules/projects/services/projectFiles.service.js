@@ -382,6 +382,23 @@ const deleteProjectFile = async (projectId, fileId, userId) => {
   return { success: true };
 };
 
+const saveProjectFileToSpace = async (projectId, fileId, userId) => {
+  const { file } = await assertFileAccess(projectId, fileId, userId);
+  const saved = await prisma.userSavedFile.upsert({
+    where: { userId_projectFileId: { userId, projectFileId: file.id } },
+    update: {},
+    create: { userId, projectFileId: file.id },
+  });
+  return saved;
+};
+
+const removeSavedFile = async (userId, projectFileId) => {
+  await prisma.userSavedFile.deleteMany({
+    where: { userId, projectFileId },
+  });
+  return { success: true };
+};
+
 const getProjectStorageUsage = async (projectId, userId) => {
   const project = await assertProjectAccess(projectId, userId);
   const payload = await buildStoragePayload(project.owner);
@@ -397,7 +414,11 @@ module.exports = {
   downloadProjectFile,
   deleteProjectFileVersion,
   deleteProjectFile,
+  saveProjectFileToSpace,
+  removeSavedFile,
   getProjectStorageUsage,
+  PROJECT_FILES_BUCKET,
+  SIGNED_URL_TTL_SECONDS,
   // exports for other modules that want to reason about limits.
   MAX_FILE_UPLOAD_BYTES,
   MAX_FILE_UPLOAD_MB,
