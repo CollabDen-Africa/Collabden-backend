@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const { requireProjectAccess } = require("../../../middleware/projectAccess");
+const { requireIdentityVerified } = require("../../../middleware/profileComplete.middleware");
 const { adminMiddleware } = require("../../../middleware/admin.middleware");
 const validateRequest = require("../../../middleware/validateRequest");
 const {
@@ -347,6 +348,7 @@ router.patch(
 router.post(
   "/:projectId/escrow",
   requireProjectAccess,
+  requireIdentityVerified,
   validateRequest(configureEscrowSchema),
   configureEscrow
 );
@@ -482,7 +484,7 @@ router.patch(
  *       401:
  *         description: Unauthorized
  */
-router.post("/:projectId/escrow/fund", requireProjectAccess, fundEscrow);
+router.post("/:projectId/escrow/fund", requireProjectAccess, requireIdentityVerified, fundEscrow);
 
 /**
  * @swagger
@@ -691,6 +693,7 @@ router.post(
 router.patch(
   "/:projectId/escrow/milestones/:milestoneId/approve",
   requireProjectAccess,
+  requireIdentityVerified,
   approveMilestone
 );
 

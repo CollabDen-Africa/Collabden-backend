@@ -179,19 +179,26 @@ const createProjectService = async ({
       );
     }
 
-    // Budget rules
-    if (marketplaceSettings.requireProjectBudget) {
-      if (!budget || Number(budget) <= 0) {
-        throw new Error(
-          "A project budget is required for marketplace listings."
-        );
+    // Budget rules — volunteer listings are exempt (no money involved).
+    const isVolunteer = (pricingType || "").toUpperCase() === "VOLUNTEER";
+    if (!isVolunteer) {
+      if (marketplaceSettings.requireProjectBudget) {
+        if (!budget || Number(budget) <= 0) {
+          throw new Error(
+            "A project budget is required for marketplace listings."
+          );
+        }
       }
-    }
-    if (marketplaceSettings.minimumProjectBudget > 0 && budget !== undefined) {
-      if (Number(budget) < marketplaceSettings.minimumProjectBudget) {
-        throw new Error(
-          `Project budget must be at least ${marketplaceSettings.minimumProjectBudget}.`
-        );
+      if (
+        marketplaceSettings.minimumProjectBudget > 0 &&
+        budget !== undefined &&
+        budget !== null
+      ) {
+        if (Number(budget) < marketplaceSettings.minimumProjectBudget) {
+          throw new Error(
+            `Project budget must be at least ${marketplaceSettings.minimumProjectBudget}.`
+          );
+        }
       }
     }
 
@@ -253,27 +260,25 @@ const createProjectService = async ({
       );
     }
 
-    // 2. Check connections
-    // 2. Check connections and verification
+    // 2. Check connections. We do NOT gate KYC here — a collaborator's
+    // verification only matters at the point they'd receive a payout, which
+    // is enforced in escrowRelease.service.js. Project creation stays open
+    // to any mix of verified / unverified users (paid or volunteer).
     for (const collaboratorId of collaboratorIds) {
+      const colProfile = await prisma.userProfile.findUnique({
+        where: { id: collaboratorId },
+        select: { id: true, displayName: true, legalName: true, email: true },
+      });
+      const collaboratorName =
+        colProfile?.displayName ||
+        colProfile?.legalName ||
+        colProfile?.email ||
+        "this collaborator";
+
       const isConnected = await checkConnection(userId, collaboratorId);
       if (!isConnected) {
         throw new Error(
-          `You can only invite collaborators you are connected with. Please send a connection request to user ${collaboratorId} first.`
-        );
-      }
-
-      const colProfile = await prisma.userProfile.findUnique({
-        where: { id: collaboratorId },
-      });
-
-      if (
-        !colProfile ||
-        !colProfile.identityVerified ||
-        !colProfile.legalName
-      ) {
-        throw new Error(
-          `Collaborator ${collaboratorId} must complete their identity verification (via government ID/NIN) and set their legal name before they can collaborate on projects.`
+          `You can only invite collaborators you are connected with. Please send a connection request to ${collaboratorName} first.`
         );
       }
     }
@@ -1260,6 +1265,7 @@ const getMarketplaceProjectsService = async (userId, filters = {}) => {
           email: true,
           avatarUrl: true,
           tier: true,
+          identityVerified: true,
         },
       },
       collaborators: {
@@ -1302,6 +1308,7 @@ const getMarketplaceProjectSummaryService = async (projectId) => {
           email: true,
           avatarUrl: true,
           tier: true,
+          identityVerified: true,
         },
       },
       _count: {
