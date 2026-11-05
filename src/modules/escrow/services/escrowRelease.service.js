@@ -31,6 +31,24 @@ const releaseMilestonePayment = async (milestone, projectName, isAutoReleased = 
     throw new Error("Some collaborators on this milestone have already been paid. Possible duplicate release.");
   }
 
+  // Block release if any recipient is not identity-verified.
+  // Payment release is the point of no return — a user whose KYC lapses or who
+  // slipped past earlier gates must not receive funds that can then be withdrawn.
+  const recipientIds = collaborators.map((mc) => mc.userId);
+  const recipientProfiles = await prisma.userProfile.findMany({
+    where: { id: { in: recipientIds } },
+    select: { id: true, identityVerified: true, displayName: true, legalName: true, email: true },
+  });
+  const unverifiedRecipients = recipientProfiles.filter((p) => !p.identityVerified);
+  if (unverifiedRecipients.length > 0 || recipientProfiles.length !== recipientIds.length) {
+    const names = unverifiedRecipients
+      .map((p) => p.displayName || p.legalName || p.email || p.id)
+      .join(", ");
+    throw new Error(
+      `Cannot release payment: the following recipient(s) have not completed identity verification — ${names || "unknown user"}.`
+    );
+  }
+
   const amount = Number(milestone.amount);
   const totalReleaseAmount = amount * collaborators.length;
 

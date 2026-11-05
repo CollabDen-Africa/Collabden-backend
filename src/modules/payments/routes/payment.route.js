@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { authMiddleware } = require("../../../middleware/auth.middleware");
+const { requireIdentityVerified } = require("../../../middleware/profileComplete.middleware");
 const validateRequest = require("../../../middleware/validateRequest");
 const {
   initializeFundingSchema,
@@ -555,7 +556,7 @@ router.delete("/bank-accounts/:id", removeBankAccount);
  *       401:
  *         description: Unauthorized
  */
-router.post("/withdraw", validateRequest(requestWithdrawalSchema), requestWithdrawal);
+router.post("/withdraw", requireIdentityVerified, validateRequest(requestWithdrawalSchema), requestWithdrawal);
 
 /**
  * @swagger
