@@ -12,6 +12,7 @@ const {
   projectEndorsementSchema,
   addBackupEmailSchema,
   verifyBackupEmailSchema,
+  updatePreferencesSchema,
 } = require("../../../schemas/profile.schema");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
 const { avatarUpload } = require("../../../middleware/avatarUpload.middleware");
@@ -287,6 +288,60 @@ router.delete("/backup-email", authMiddleware, profileController.removeBackupEma
  *         description: Success
  */
 router.get("/completeness", authMiddleware, profileController.getProfileCompleteness);
+
+/**
+ * @swagger
+ * /api/v1/user/profile/preferences:
+ *   get:
+ *     summary: Get account preferences (theme)
+ *     description: >
+ *       Returns the preferences saved on the account. The theme is stored server-side
+ *       so it carries over to every device; it is also included as `theme` on the
+ *       login response and on GET /api/v1/user/profile.
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Preferences retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 preferences:
+ *                   type: object
+ *                   properties:
+ *                     theme:
+ *                       type: string
+ *                       enum: [LIGHT, DARK, SYSTEM]
+ *                       example: DARK
+ *   patch:
+ *     summary: Update account preferences (theme)
+ *     description: Saves the theme on the account so it applies on every device the user signs in from. Case-insensitive.
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [theme]
+ *             properties:
+ *               theme:
+ *                 type: string
+ *                 enum: [LIGHT, DARK, SYSTEM]
+ *                 example: DARK
+ *     responses:
+ *       200:
+ *         description: Preferences updated
+ *       400:
+ *         description: Invalid theme value
+ */
+router.get("/preferences", authMiddleware, profileController.getPreferences);
+router.patch("/preferences", authMiddleware, validateRequest(updatePreferencesSchema), profileController.updatePreferences);
 
 /**
  * @swagger

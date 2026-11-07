@@ -3,6 +3,139 @@ const { publishEvent } = require("../../../events/publisher");
 const EVENT_TYPES = require("../../../events/eventTypes");
 const walletService = require("../../payments/services/wallet.service");
 const flutterwaveService = require("../../payments/services/flutterwave.service");
+const {
+  MIN_ESCROW_AMOUNT,
+  buildEscrowTerms,
+  planCollaboratorRemoval,
+} = require("../../../helpers/escrowTerms");
+
+// Owners may nudge a collaborator about a pending approval at most once per window.
+const ESCROW_REMINDER_COOLDOWN_HOURS = 24;
+
+/**
+ * Verify an agreement exists, belongs to the project, and is fully signed.
+ */
+const assertSignedProjectAgreement = async (agreementId, projectId) => {
+  const agreement = await prisma.legalAgreement.findUnique({
+    where: { id: agreementId },
+    include: { signatures: true },
+  });
+
+  if (!agreement) {
+    throw new Error("Legal agreement not found.");
+  }
+
+  if (agreement.projectId !== projectId) {
+    throw new Error("The agreement does not belong to this project.");
+  }
+
+  if (agreement.status !== "SIGNED") {
+    throw new Error("Escrow cannot be configured until the legal agreement is fully signed.");
+  }
+
+  return agreement;
+};
+
+/**
+ * Validate milestone terms against the project's active collaborators and derive allocations.
+ */
+const resolveEscrowTerms = (project, milestones, totalAmount) => {
+  const eligibleCollaboratorIds = project.collaborators
+    .filter((c) => c.role === "COLLABORATOR")
+    .map((c) => c.userId);
+
+  const collaboratorRecordMap = {};
+  for (const c of project.collaborators) {
+    collaboratorRecordMap[c.userId] = c.id;
+  }
+
+  const { allocationByUser, effectiveTotalCost } = buildEscrowTerms({
+    milestones,
+    totalAmount,
+    eligibleCollaboratorIds,
+  });
+
+  return { allocationByUser, effectiveTotalCost, collaboratorRecordMap };
+};
+
+/**
+ * Create per-collaborator allocations (all PENDING approval) and milestones with
+ * their collaborator links, inside an existing transaction.
+ */
+const createEscrowTermsRecords = async (tx, escrowId, milestones, allocationByUser, collaboratorRecordMap) => {
+  // Create per-collaborator allocations (derived from milestones, used for approval tracking)
+  for (const [userId, amount] of Object.entries(allocationByUser)) {
+    await tx.escrowAllocation.create({
+      data: {
+        escrowId,
+        collaboratorId: collaboratorRecordMap[userId],
+        userId,
+        totalAmount: amount,
+        approvalStatus: "PENDING",
+      },
+    });
+  }
+
+  // Create milestones with their collaborator links
+  for (const ms of milestones) {
+    const milestone = await tx.escrowMilestone.create({
+      data: {
+        escrowId,
+        title: ms.title,
+        description: ms.description || null,
+        amount: ms.amount,
+        dueDate: ms.dueDate ? new Date(ms.dueDate) : null,
+        status: "PENDING",
+      },
+    });
+
+    // Create MilestoneCollaborator junction records
+    for (const collabId of ms.collaboratorIds) {
+      await tx.milestoneCollaborator.create({
+        data: {
+          milestoneId: milestone.id,
+          userId: collabId,
+        },
+      });
+    }
+  }
+};
+
+/**
+ * Load a project's escrow for an owner-only review action and enforce the
+ * shared preconditions: owner, escrow exists, still awaiting funding.
+ */
+const getOwnerEscrowForReview = async (projectId, ownerId, include = {}) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      ownerId: true,
+      name: true,
+      isDeleted: true,
+      collaborators: { where: { isActive: true }, select: { id: true, userId: true, role: true } },
+    },
+  });
+
+  if (!project || project.isDeleted) {
+    throw new Error("Project not found.");
+  }
+
+  if (project.ownerId !== ownerId) {
+    throw new Error("Only the project owner can manage the escrow proposal.");
+  }
+
+  const escrow = await prisma.escrow.findUnique({ where: { projectId }, include });
+
+  if (!escrow) {
+    throw new Error("No escrow configuration found for this project.");
+  }
+
+  if (escrow.status !== "PENDING_FUNDING") {
+    throw new Error("The escrow proposal can only be changed before funding.");
+  }
+
+  return { project, escrow };
+};
 
 /**
  * Configure a new escrow for a project.
@@ -43,63 +176,14 @@ const configureEscrow = async (projectId, ownerId, data) => {
   }
 
   // 3. Verify the agreement exists, is SIGNED, and belongs to this project
-  const agreement = await prisma.legalAgreement.findUnique({
-    where: { id: agreementId },
-    include: { signatures: true },
-  });
+  await assertSignedProjectAgreement(agreementId, projectId);
 
-  if (!agreement) {
-    throw new Error("Legal agreement not found.");
-  }
-
-  if (agreement.projectId !== projectId) {
-    throw new Error("The agreement does not belong to this project.");
-  }
-
-  if (agreement.status !== "SIGNED") {
-    throw new Error("Escrow cannot be configured until the legal agreement is fully signed.");
-  }
-
-  // 4. Validate all collaborator IDs in milestones exist on the project
-  const projectCollaboratorIds = project.collaborators
-    .filter((c) => c.role === "COLLABORATOR")
-    .map((c) => c.userId);
-
-  const collaboratorRecordMap = {};
-  for (const c of project.collaborators) {
-    collaboratorRecordMap[c.userId] = c.id;
-  }
-
-  for (const ms of milestones) {
-    for (const collabId of ms.collaboratorIds) {
-      if (!projectCollaboratorIds.includes(collabId)) {
-        throw new Error(`User ${collabId} is not an active collaborator on this project.`);
-      }
-    }
-  }
-
-  // 5. Calculate effective total cost and validate against totalAmount
-  // Each collaborator on a milestone receives the FULL milestone amount.
-  // Effective cost = Σ(milestone.amount × number of collaborators on that milestone)
-  const effectiveTotalCost = milestones.reduce(
-    (sum, ms) => sum + Number(ms.amount) * ms.collaboratorIds.length, 0
+  // 4-6. Validate collaborators and milestone cost, derive per-collaborator allocations
+  const { allocationByUser, effectiveTotalCost, collaboratorRecordMap } = resolveEscrowTerms(
+    project,
+    milestones,
+    totalAmount
   );
-
-  if (Math.abs(effectiveTotalCost - Number(totalAmount)) > 0.01) {
-    throw new Error(
-      `Total escrow amount (₦${Number(totalAmount).toLocaleString()}) must equal the effective milestone cost (₦${effectiveTotalCost.toLocaleString()}). ` +
-      `Each collaborator on a milestone receives the full milestone amount. ` +
-      `Breakdown: ${milestones.map((ms) => `"${ms.title}": ₦${Number(ms.amount).toLocaleString()} × ${ms.collaboratorIds.length} collaborator(s)`).join(", ")}.`
-    );
-  }
-
-  // 6. Compute per-collaborator allocations from milestones
-  const allocationByUser = {};
-  for (const ms of milestones) {
-    for (const collabId of ms.collaboratorIds) {
-      allocationByUser[collabId] = (allocationByUser[collabId] || 0) + Number(ms.amount);
-    }
-  }
 
   // 7. Create escrow with allocations, milestones, and collaborator links in a single transaction
   const escrow = await prisma.$transaction(async (tx) => {
@@ -113,42 +197,7 @@ const configureEscrow = async (projectId, ownerId, data) => {
       },
     });
 
-    // Create per-collaborator allocations (derived from milestones, used for approval tracking)
-    for (const [userId, amount] of Object.entries(allocationByUser)) {
-      await tx.escrowAllocation.create({
-        data: {
-          escrowId: newEscrow.id,
-          collaboratorId: collaboratorRecordMap[userId],
-          userId,
-          totalAmount: amount,
-          approvalStatus: "PENDING",
-        },
-      });
-    }
-
-    // Create milestones with their collaborator links
-    for (const ms of milestones) {
-      const milestone = await tx.escrowMilestone.create({
-        data: {
-          escrowId: newEscrow.id,
-          title: ms.title,
-          description: ms.description || null,
-          amount: ms.amount,
-          dueDate: ms.dueDate ? new Date(ms.dueDate) : null,
-          status: "PENDING",
-        },
-      });
-
-      // Create MilestoneCollaborator junction records
-      for (const collabId of ms.collaboratorIds) {
-        await tx.milestoneCollaborator.create({
-          data: {
-            milestoneId: milestone.id,
-            userId: collabId,
-          },
-        });
-      }
-    }
+    await createEscrowTermsRecords(tx, newEscrow.id, milestones, allocationByUser, collaboratorRecordMap);
 
     // Create activity log
     await tx.escrowActivity.create({
@@ -481,10 +530,265 @@ const getEscrowStatus = async (projectId, userId) => {
   };
 };
 
+/**
+ * Replace the escrow terms (milestones, amounts, review period, agreement) before funding.
+ * Any change to the terms resets every collaborator's approval to PENDING, so
+ * collaborators always approve the terms that will actually be funded.
+ *
+ * @param {string} projectId - The project ID
+ * @param {string} ownerId - The project owner's user ID
+ * @param {object} data - { totalAmount, milestones, reviewPeriodDays?, agreementId? }
+ * @returns {object} The updated escrow with allocations and milestones
+ */
+const updateEscrowTerms = async (projectId, ownerId, data) => {
+  const { totalAmount, agreementId, reviewPeriodDays, milestones } = data;
+
+  const { project, escrow } = await getOwnerEscrowForReview(projectId, ownerId, { allocations: true });
+
+  if (agreementId && agreementId !== escrow.agreementId) {
+    await assertSignedProjectAgreement(agreementId, projectId);
+  }
+
+  const { allocationByUser, effectiveTotalCost, collaboratorRecordMap } = resolveEscrowTerms(
+    project,
+    milestones,
+    totalAmount
+  );
+
+  const nextReviewPeriodDays = reviewPeriodDays ?? escrow.reviewPeriodDays;
+  const removedUserIds = escrow.allocations
+    .map((a) => a.userId)
+    .filter((userId) => !(userId in allocationByUser));
+  const approvalsReset = escrow.allocations.filter((a) => a.approvalStatus !== "PENDING").length;
+
+  await prisma.$transaction(async (tx) => {
+    // Re-check inside the transaction so terms can't change under a concurrent funding.
+    const { count } = await tx.escrow.updateMany({
+      where: { id: escrow.id, status: "PENDING_FUNDING" },
+      data: {
+        totalAmount,
+        reviewPeriodDays: nextReviewPeriodDays,
+        agreementId: agreementId || escrow.agreementId,
+      },
+    });
+    if (count === 0) {
+      throw new Error("The escrow proposal can only be changed before funding.");
+    }
+
+    // Milestones are all PENDING before funding, so they can be rebuilt from scratch.
+    await tx.escrowMilestone.deleteMany({ where: { escrowId: escrow.id } });
+    await tx.escrowAllocation.deleteMany({ where: { escrowId: escrow.id } });
+    await createEscrowTermsRecords(tx, escrow.id, milestones, allocationByUser, collaboratorRecordMap);
+
+    await tx.escrowActivity.create({
+      data: {
+        escrowId: escrow.id,
+        userId: ownerId,
+        action: "ESCROW_TERMS_UPDATED",
+        details: `Escrow terms updated to ₦${Number(totalAmount).toLocaleString()} across ${milestones.length} milestone(s) for ${Object.keys(allocationByUser).length} collaborator(s). All collaborator approvals were reset.`,
+        metadata: {
+          previousTotalAmount: Number(escrow.totalAmount),
+          totalAmount,
+          effectiveTotalCost,
+          reviewPeriodDays: nextReviewPeriodDays,
+          removedCollaboratorIds: removedUserIds,
+          approvalsReset,
+        },
+      },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        projectId,
+        action: "ESCROW_TERMS_UPDATED",
+        details: `Escrow terms updated: ₦${Number(totalAmount).toLocaleString()} with ${milestones.length} milestones. Collaborators must re-approve.`,
+      },
+    });
+  });
+
+  const fullEscrow = await getEscrowByProject(projectId, ownerId);
+
+  for (const [userId, amount] of Object.entries(allocationByUser)) {
+    await publishEvent(EVENT_TYPES.ESCROW_TERMS_UPDATED, {
+      escrowId: escrow.id,
+      projectId,
+      projectName: project.name,
+      collaboratorId: userId,
+      amount,
+      totalAmount,
+    });
+  }
+
+  for (const userId of removedUserIds) {
+    await publishEvent(EVENT_TYPES.ESCROW_COLLABORATOR_REMOVED, {
+      escrowId: escrow.id,
+      projectId,
+      projectName: project.name,
+      collaboratorId: userId,
+    });
+  }
+
+  return fullEscrow;
+};
+
+/**
+ * Remind a collaborator who has not yet approved the escrow proposal.
+ * Rate limited to one reminder per collaborator per ESCROW_REMINDER_COOLDOWN_HOURS.
+ *
+ * @param {string} projectId - The project ID
+ * @param {string} ownerId - The project owner's user ID
+ * @param {string} collaboratorUserId - The collaborator to remind
+ * @returns {object} { collaboratorId, remindedAt, nextReminderAvailableAt }
+ */
+const remindEscrowCollaborator = async (projectId, ownerId, collaboratorUserId) => {
+  const { project, escrow } = await getOwnerEscrowForReview(projectId, ownerId, { allocations: true });
+
+  const allocation = escrow.allocations.find((a) => a.userId === collaboratorUserId);
+  if (!allocation) {
+    throw new Error("Escrow allocation not found for this collaborator.");
+  }
+
+  if (allocation.approvalStatus === "APPROVED") {
+    throw new Error("This collaborator has already approved the escrow proposal.");
+  }
+
+  const cooldownMs = ESCROW_REMINDER_COOLDOWN_HOURS * 60 * 60 * 1000;
+  const lastReminder = await prisma.escrowActivity.findFirst({
+    where: {
+      escrowId: escrow.id,
+      action: "ESCROW_APPROVAL_REMINDER_SENT",
+      createdAt: { gte: new Date(Date.now() - cooldownMs) },
+      metadata: { path: ["collaboratorId"], equals: collaboratorUserId },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (lastReminder) {
+    const nextAvailable = new Date(lastReminder.createdAt.getTime() + cooldownMs);
+    throw new Error(
+      `This collaborator was already reminded in the last ${ESCROW_REMINDER_COOLDOWN_HOURS} hours. ` +
+      `You can send another reminder after ${nextAvailable.toISOString()}.`
+    );
+  }
+
+  const reminder = await prisma.escrowActivity.create({
+    data: {
+      escrowId: escrow.id,
+      userId: ownerId,
+      action: "ESCROW_APPROVAL_REMINDER_SENT",
+      details: "Owner sent a reminder to review the escrow proposal.",
+      metadata: { collaboratorId: collaboratorUserId, approvalStatus: allocation.approvalStatus },
+    },
+  });
+
+  await publishEvent(EVENT_TYPES.ESCROW_APPROVAL_REMINDER, {
+    escrowId: escrow.id,
+    projectId,
+    projectName: project.name,
+    collaboratorId: collaboratorUserId,
+    amount: Number(allocation.totalAmount),
+    totalAmount: Number(escrow.totalAmount),
+  });
+
+  return {
+    collaboratorId: collaboratorUserId,
+    remindedAt: reminder.createdAt,
+    nextReminderAvailableAt: new Date(reminder.createdAt.getTime() + cooldownMs),
+  };
+};
+
+/**
+ * Remove a collaborator from the escrow proposal before funding. They stay on the project.
+ * Their milestone links and allocation are dropped, milestones left with nobody
+ * assigned are removed, and the escrow total is recalculated. Other collaborators'
+ * allocations are unchanged, so their approvals stand.
+ *
+ * @param {string} projectId - The project ID
+ * @param {string} ownerId - The project owner's user ID
+ * @param {string} collaboratorUserId - The collaborator to remove
+ * @returns {object} The updated escrow with allocations and milestones
+ */
+const removeEscrowCollaborator = async (projectId, ownerId, collaboratorUserId) => {
+  const { project, escrow } = await getOwnerEscrowForReview(projectId, ownerId, {
+    allocations: true,
+    milestones: { include: { collaborators: { select: { userId: true } } } },
+  });
+
+  const allocation = escrow.allocations.find((a) => a.userId === collaboratorUserId);
+  if (!allocation) {
+    throw new Error("Escrow allocation not found for this collaborator.");
+  }
+
+  if (escrow.allocations.length === 1) {
+    throw new Error("Cannot remove the only collaborator from the escrow proposal. An escrow needs at least one collaborator.");
+  }
+
+  const { emptiedMilestoneIds, newTotalAmount } = planCollaboratorRemoval(escrow.milestones, collaboratorUserId);
+
+  if (newTotalAmount < MIN_ESCROW_AMOUNT) {
+    throw new Error(
+      `Removing this collaborator would bring the escrow total to ₦${newTotalAmount.toLocaleString()}, below the ₦${MIN_ESCROW_AMOUNT.toLocaleString()} minimum. Edit the escrow terms instead.`
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.escrow.updateMany({
+      where: { id: escrow.id, status: "PENDING_FUNDING" },
+      data: { totalAmount: newTotalAmount },
+    });
+    if (count === 0) {
+      throw new Error("The escrow proposal can only be changed before funding.");
+    }
+
+    await tx.milestoneCollaborator.deleteMany({
+      where: { userId: collaboratorUserId, milestone: { escrowId: escrow.id } },
+    });
+    if (emptiedMilestoneIds.length > 0) {
+      await tx.escrowMilestone.deleteMany({ where: { id: { in: emptiedMilestoneIds } } });
+    }
+    await tx.escrowAllocation.delete({ where: { id: allocation.id } });
+
+    await tx.escrowActivity.create({
+      data: {
+        escrowId: escrow.id,
+        userId: ownerId,
+        action: "ESCROW_COLLABORATOR_REMOVED",
+        details: `A collaborator was removed from the escrow proposal. New total: ₦${newTotalAmount.toLocaleString()}.${emptiedMilestoneIds.length ? ` ${emptiedMilestoneIds.length} milestone(s) with no remaining collaborators were removed.` : ""}`,
+        metadata: {
+          collaboratorId: collaboratorUserId,
+          previousTotalAmount: Number(escrow.totalAmount),
+          totalAmount: newTotalAmount,
+          removedMilestoneIds: emptiedMilestoneIds,
+        },
+      },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        projectId,
+        action: "ESCROW_COLLABORATOR_REMOVED",
+        details: `A collaborator was removed from the escrow proposal. New escrow total: ₦${newTotalAmount.toLocaleString()}.`,
+      },
+    });
+  });
+
+  await publishEvent(EVENT_TYPES.ESCROW_COLLABORATOR_REMOVED, {
+    escrowId: escrow.id,
+    projectId,
+    projectName: project.name,
+    collaboratorId: collaboratorUserId,
+  });
+
+  return getEscrowByProject(projectId, ownerId);
+};
+
 module.exports = {
   configureEscrow,
   getEscrowByProject,
   approveEscrowProposal,
   fundEscrow,
   getEscrowStatus,
+  updateEscrowTerms,
+  remindEscrowCollaborator,
+  removeEscrowCollaborator,
 };
