@@ -73,6 +73,14 @@ const projectEndorsementSchema = z.object({
   content: z.string().min(10, "Endorsement must be at least 10 characters"),
 });
 
+// Stored on the account so the theme follows the user across devices.
+const updatePreferencesSchema = z.object({
+  theme: z
+    .string({ error: "Theme is required" })
+    .transform((val) => val.toUpperCase())
+    .pipe(z.enum(["LIGHT", "DARK", "SYSTEM"], { error: "Theme must be LIGHT, DARK, or SYSTEM" })),
+});
+
 const addBackupEmailSchema = z.object({
   backupEmail: z.string().email("Must be a valid email address"),
 });
@@ -95,4 +103,5 @@ module.exports = {
   projectEndorsementSchema,
   addBackupEmailSchema,
   verifyBackupEmailSchema,
+  updatePreferencesSchema,
 };
