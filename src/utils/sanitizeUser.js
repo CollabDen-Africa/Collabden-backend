@@ -1,11 +1,19 @@
 /**
  * Remove sensitive fields from user object
- * Excludes: password, verificationToken
+ * Excludes: password, tokens, the 2FA secret and the NIN hash
  */
 const sanitizeUser = (user) => {
   if (!user) return null;
 
-  const { password, verificationToken, resetToken, backupEmailToken, ...sanitizedUser } = user;
+  const {
+    password,
+    verificationToken,
+    resetToken,
+    backupEmailToken,
+    twoFactorSecret,
+    ninHash,
+    ...sanitizedUser
+  } = user;
   return sanitizedUser;
 };
 

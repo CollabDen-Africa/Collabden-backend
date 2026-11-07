@@ -16,6 +16,7 @@ enum AgreementStatus {
   PENDING_SIGNATURE
   SIGNED
   EXPIRED
+  CANCELLED
 }
 
 enum ProjectMessageType {
@@ -197,6 +198,12 @@ model LegalAgreement {
   status        AgreementStatus       @default(DRAFT)
   expiresAt     DateTime?
   auditMetadata Json?
+  // Mutual cancellation: every party (project owner + signers) must consent.
+  cancellationRequestedById String?
+  cancellationRequestedAt   DateTime?
+  cancellationReason        String?
+  cancellationApprovals     String[]  @default([])
+  cancelledAt               DateTime?
   project       Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
