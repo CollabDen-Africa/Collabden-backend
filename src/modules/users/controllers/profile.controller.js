@@ -6,6 +6,11 @@ const sharp = require("sharp");
 const supabase = require("../../../config/supabase");
 const { sendEmail } = require("../../../utils/sendEmail");
 const { getBackupEmailVerificationTemplate } = require("../../../utils/emailTemplates");
+const {
+  publicProfileSelect,
+  publicProjectWhere,
+  buildPortfolioProjectSelect,
+} = require("../../../utils/publicProfile");
 const AVATAR_BUCKET = "user-avatars";
 
 /**
@@ -341,24 +346,7 @@ const getProfile = async (req, res) => {
 
     const profile = await prisma.userProfile.findUnique({
       where: { id: userId },
-      include: {
-        receivedEndorsements: {
-          where: { isApproved: true },
-          include: {
-            endorser: {
-              select: {
-                id: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
-        ownedProjects: {
-          where: { status: "COMPLETED" },
-        },
-      },
+      select: publicProfileSelect,
     });
 
     if (!profile) {
@@ -405,28 +393,13 @@ const getPortfolio = async (req, res) => {
       where: {
         userId: userId,
         project: {
-          status: 'COMPLETED'
+          status: 'COMPLETED',
+          ...publicProjectWhere,
         }
       },
       include: {
         project: {
-          include: {
-            collaborators: {
-              include: {
-                user: {
-                  select: { id: true, displayName: true, firstName: true, lastName: true }
-                }
-              }
-            },
-            endorsements: {
-              where: { recipientId: userId, isApproved: true },
-              include: {
-                endorser: {
-                  select: { id: true, displayName: true, firstName: true, lastName: true }
-                }
-              }
-            }
-          }
+          select: buildPortfolioProjectSelect(userId),
         }
       },
       orderBy: [
@@ -546,6 +519,46 @@ const addProjectEndorsement = async (req, res) => {
   } catch (error) {
     console.error("Error adding project endorsement:", error);
     res.status(500).json({ error: "Failed to add project endorsement" });
+  }
+};
+
+/**
+ * Get the authenticated user's account preferences (theme).
+ * The same value is also returned on login and GET /user/profile.
+ */
+const getPreferences = async (req, res) => {
+  try {
+    const preferences = await prisma.userProfile.findUnique({
+      where: { id: req.user.id },
+      select: { theme: true },
+    });
+
+    if (!preferences) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    res.status(200).json({ preferences });
+  } catch (error) {
+    console.error("Error fetching preferences:", error);
+    res.status(500).json({ error: "Failed to fetch preferences" });
+  }
+};
+
+/**
+ * Update the authenticated user's account preferences so they carry over to every device.
+ */
+const updatePreferences = async (req, res) => {
+  try {
+    const preferences = await prisma.userProfile.update({
+      where: { id: req.user.id },
+      data: { theme: req.body.theme },
+      select: { theme: true },
+    });
+
+    res.status(200).json({ message: "Preferences updated successfully", preferences });
+  } catch (error) {
+    console.error("Error updating preferences:", error);
+    res.status(500).json({ error: "Failed to update preferences" });
   }
 };
 
@@ -790,6 +803,8 @@ module.exports = {
   updatePortfolioEntry,
   addProjectEndorsement,
   getProfileCompleteness,
+  getPreferences,
+  updatePreferences,
   browseCollaborators,
   addBackupEmail,
   verifyBackupEmail,

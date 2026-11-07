@@ -7,6 +7,7 @@ const { adminMiddleware } = require("../../../middleware/admin.middleware");
 const validateRequest = require("../../../middleware/validateRequest");
 const {
   configureEscrowSchema,
+  updateEscrowSchema,
   approveEscrowSchema,
   submitMilestoneSchema,
   disputeMilestoneSchema,
@@ -16,6 +17,9 @@ const {
   configureEscrow,
   getProjectEscrow,
   getEscrowStatus,
+  updateEscrowTerms,
+  remindEscrowCollaborator,
+  removeEscrowCollaborator,
   approveEscrowProposal,
   fundEscrow,
   submitMilestone,
@@ -381,6 +385,191 @@ router.post(
  *         description: Unauthorized
  */
 router.get("/:projectId/escrow", requireProjectAccess, getProjectEscrow);
+
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/escrow:
+ *   put:
+ *     summary: Edit escrow terms before funding (resets approvals)
+ *     description: |
+ *       **Project owner only.** Replaces the escrow terms while the escrow is still `PENDING_FUNDING`.
+ *       `milestones` and `totalAmount` replace the existing terms wholesale (same rules as configuring:
+ *       each collaborator on a milestone receives the full milestone amount, and `totalAmount` must equal
+ *       the effective milestone cost). `reviewPeriodDays` and `agreementId` keep their current values when omitted.
+ *
+ *       **Approval reset:** every collaborator's approval goes back to `PENDING`, and each collaborator is
+ *       notified to review the new terms. Collaborators left out of the new milestones are removed from the
+ *       proposal and notified.
+ *     tags: [Escrow]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [totalAmount, milestones]
+ *             properties:
+ *               totalAmount:
+ *                 type: number
+ *                 example: 300000
+ *               agreementId:
+ *                 type: string
+ *                 description: Optional. Switch to a different SIGNED agreement on this project.
+ *               reviewPeriodDays:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 30
+ *               milestones:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [title, amount, collaboratorIds]
+ *                   properties:
+ *                     title:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     amount:
+ *                       type: number
+ *                     dueDate:
+ *                       type: string
+ *                       format: date-time
+ *                     collaboratorIds:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *     responses:
+ *       200:
+ *         description: Terms updated and approvals reset
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Escrow'
+ *       400:
+ *         description: Validation error, not the owner, or escrow already funded
+ *       404:
+ *         description: No escrow found
+ *       401:
+ *         description: Unauthorized
+ */
+router.put(
+  "/:projectId/escrow",
+  requireProjectAccess,
+  requireIdentityVerified,
+  validateRequest(updateEscrowSchema),
+  updateEscrowTerms
+);
+
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/escrow/collaborators/{userId}/remind:
+ *   post:
+ *     summary: Remind a collaborator to review the escrow proposal
+ *     description: |
+ *       **Project owner only.** Sends an in-app notification asking the collaborator to review the
+ *       escrow proposal. Only allowed before funding and while the collaborator has not approved.
+ *       Limited to one reminder per collaborator every 24 hours.
+ *     tags: [Escrow]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         description: The collaborator's user ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Reminder sent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Reminder sent.
+ *                 collaboratorId:
+ *                   type: string
+ *                 remindedAt:
+ *                   type: string
+ *                   format: date-time
+ *                 nextReminderAvailableAt:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: Not the owner, escrow already funded, or collaborator already approved
+ *       404:
+ *         description: No escrow, or the user has no allocation in it
+ *       429:
+ *         description: Collaborator was already reminded in the last 24 hours
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/:projectId/escrow/collaborators/:userId/remind",
+  requireProjectAccess,
+  remindEscrowCollaborator
+);
+
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/escrow/collaborators/{userId}:
+ *   delete:
+ *     summary: Remove a collaborator from the escrow proposal
+ *     description: |
+ *       **Project owner only.** Removes the collaborator from the unfunded escrow proposal; they remain
+ *       on the project. Their milestone assignments and allocation are dropped, milestones left with no
+ *       collaborators are deleted, and `totalAmount` is recalculated. Other collaborators' allocations
+ *       (and approvals) are unchanged. The last remaining collaborator cannot be removed.
+ *     tags: [Escrow]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         description: The collaborator's user ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Collaborator removed; returns the updated escrow
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Escrow'
+ *       400:
+ *         description: Not the owner, escrow already funded, last collaborator, or total would fall below the minimum
+ *       404:
+ *         description: No escrow, or the user has no allocation in it
+ *       401:
+ *         description: Unauthorized
+ */
+router.delete(
+  "/:projectId/escrow/collaborators/:userId",
+  requireProjectAccess,
+  removeEscrowCollaborator
+);
 
 /**
  * @swagger

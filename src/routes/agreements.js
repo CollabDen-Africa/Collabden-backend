@@ -12,6 +12,9 @@ const {
   downloadAgreementHandler,
   getAgreementPermissionsHandler,
   updateAgreementPermissionHandler,
+  requestAgreementCancellationHandler,
+  respondToAgreementCancellationHandler,
+  deleteAgreementHandler,
 } = require('../modules/projects/controllers/agreement.controller');
 
 const router = express.Router({ mergeParams: true });
@@ -67,7 +70,9 @@ const handleUpload = (req, res, next) => {
  *       description: >
  *         A legal agreement document attached to a project. Lifecycle:
  *         DRAFT → PENDING_SIGNATURE → SIGNED. EXPIRED can be set on any
- *         non-locked agreement once its expiresAt date passes.
+ *         non-locked agreement once its expiresAt date passes. CANCELLED is
+ *         reached only through mutual cancellation, once every party (the
+ *         project owner and all signers) has consented.
  *       properties:
  *         id:
  *           type: string
@@ -95,7 +100,7 @@ const handleUpload = (req, res, next) => {
  *           description: Internal Supabase storage path. Not useful to the frontend.
  *         status:
  *           type: string
- *           enum: [DRAFT, PENDING_SIGNATURE, SIGNED, EXPIRED]
+ *           enum: [DRAFT, PENDING_SIGNATURE, SIGNED, EXPIRED, CANCELLED]
  *           example: PENDING_SIGNATURE
  *         expiresAt:
  *           type: string
@@ -108,7 +113,28 @@ const handleUpload = (req, res, next) => {
  *           nullable: true
  *           description: >
  *             Populated when the agreement is signed. Contains lockedAt timestamp,
- *             actionType, signerName, signerId, projectId.
+ *             actionType, signerName, signerId, projectId. Once cancelled, also
+ *             contains a `cancellation` object (cancelledAt, requestedById,
+ *             approvedBy, reason).
+ *         cancellationRequestedById:
+ *           type: string
+ *           nullable: true
+ *         cancellationRequestedAt:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *         cancellationReason:
+ *           type: string
+ *           nullable: true
+ *         cancellationApprovals:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: User IDs of parties who have consented to the pending cancellation.
+ *         cancelledAt:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
  *         signatures:
  *           type: array
  *           items:
@@ -1108,6 +1134,204 @@ router.put(
   authMiddleware,
   requireProjectAccess,
   updateAgreementPermissionHandler
+);
+
+// ─── DELETE /projects/:projectId/agreements/:id ──────────────────────────────
+
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/agreements/{id}:
+ *   delete:
+ *     summary: Delete an agreement
+ *     description: >
+ *       **Project owner only.** Permanently deletes the agreement record and its
+ *       stored file. Allowed when the agreement is CANCELLED or EXPIRED, or when it
+ *       is DRAFT / PENDING_SIGNATURE and nobody has signed it yet. A signed agreement
+ *       must first be cancelled with the consent of all parties
+ *       (see `POST /agreements/{id}/cancel`). Agreements that back the project's
+ *       escrow cannot be deleted.
+ *     tags: [Agreements]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Agreement deleted.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Agreement deleted successfully."
+ *       400:
+ *         description: Agreement is signed and not cancelled, or it backs the project's escrow.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             examples:
+ *               signed:
+ *                 summary: Signed agreement not yet cancelled
+ *                 value:
+ *                   error: "This agreement has been signed. It must be cancelled with the consent of all parties before it can be deleted."
+ *               escrow:
+ *                 summary: Agreement backs the escrow
+ *                 value:
+ *                   error: "This agreement backs the project's escrow and cannot be deleted."
+ *       403:
+ *         description: Requester is not the project owner.
+ *       404:
+ *         description: Agreement not found in this project.
+ */
+router.delete(
+  '/:projectId/agreements/:id',
+  authMiddleware,
+  requireProjectAccess,
+  deleteAgreementHandler
+);
+
+// ─── POST /projects/:projectId/agreements/:id/cancel ─────────────────────────
+
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/agreements/{id}/cancel:
+ *   post:
+ *     summary: Request mutual cancellation of an agreement
+ *     description: >
+ *       Any party to the agreement (the project owner or anyone who has signed it)
+ *       can request cancellation. The requester's consent is recorded immediately,
+ *       and the other parties are notified. The agreement becomes CANCELLED once
+ *       every party has approved via `POST /agreements/{id}/cancel/respond`. If the
+ *       requester is the only party (e.g. an unsigned agreement), it is cancelled
+ *       straight away. A cancelled agreement can then be deleted by the owner.
+ *     tags: [Agreements]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 example: "The project scope changed; we'll sign a new agreement."
+ *     responses:
+ *       200:
+ *         description: >
+ *           Cancellation requested, or the agreement was cancelled immediately.
+ *           `agreement.cancellation.pendingFrom` lists the parties who still need to consent.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Cancellation requested. Awaiting consent from the other parties."
+ *                 agreement:
+ *                   $ref: '#/components/schemas/Agreement'
+ *       400:
+ *         description: Already cancelled, a request is already pending, or the agreement backs the escrow.
+ *       403:
+ *         description: Requester is not a party to the agreement.
+ *       404:
+ *         description: Agreement not found in this project.
+ */
+router.post(
+  '/:projectId/agreements/:id/cancel',
+  authMiddleware,
+  requireProjectAccess,
+  requestAgreementCancellationHandler
+);
+
+// ─── POST /projects/:projectId/agreements/:id/cancel/respond ─────────────────
+
+/**
+ * @swagger
+ * /api/v1/projects/{projectId}/agreements/{id}/cancel/respond:
+ *   post:
+ *     summary: Approve or decline a pending cancellation request
+ *     description: >
+ *       A party to the agreement approves or declines the pending cancellation.
+ *       When the last outstanding party approves, the agreement becomes CANCELLED.
+ *       A single DECLINE ends the request and the agreement stays in force. When
+ *       the original requester sends DECLINE, the request is withdrawn.
+ *     tags: [Agreements]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [decision]
+ *             properties:
+ *               decision:
+ *                 type: string
+ *                 enum: [APPROVE, DECLINE]
+ *                 example: APPROVE
+ *     responses:
+ *       200:
+ *         description: Response recorded.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Agreement cancelled."
+ *                 agreement:
+ *                   $ref: '#/components/schemas/Agreement'
+ *       400:
+ *         description: Invalid decision, no pending request, already approved, or already cancelled.
+ *       403:
+ *         description: Requester is not a party to the agreement.
+ *       404:
+ *         description: Agreement not found in this project.
+ */
+router.post(
+  '/:projectId/agreements/:id/cancel/respond',
+  authMiddleware,
+  requireProjectAccess,
+  respondToAgreementCancellationHandler
 );
 
 module.exports = router;
