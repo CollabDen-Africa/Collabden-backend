@@ -89,6 +89,15 @@ router.use(authMiddleware);
  *         id:
  *           type: string
  *           example: chat123
+ *           description: Chat ID, or the message request ID when type is MESSAGE_REQUEST
+ *         type:
+ *           type: string
+ *           enum: [CHAT, MESSAGE_REQUEST]
+ *           description: MESSAGE_REQUEST entries are pending requests sent by the user (no chat exists yet)
+ *         requestStatus:
+ *           type: string
+ *           enum: [PENDING]
+ *           description: Only present when type is MESSAGE_REQUEST
  *         otherParticipant:
  *           type: object
  *           properties:
@@ -280,7 +289,7 @@ router.get("/requests", getMessageRequests);
  * /api/v1/messaging/chats:
  *   get:
  *     summary: List all direct chats the authenticated user is part of
- *     description: Returns a list of chats including details about the other participant, unread count, and the last message.
+ *     description: Returns a list of chats including details about the other participant, unread count, and the last message. Pending message requests sent by the user are also included with type MESSAGE_REQUEST (their lastMessage is the request message).
  *     tags: [Messaging]
  *     security:
  *       - bearerAuth: []
