@@ -275,7 +275,7 @@ router.post("/:id/files/:fileId/versions/:versionId/restore", restoreFileVersion
  * @swagger
  * /api/v1/projects/{id}/files/{fileId}/versions/{versionId}:
  *   delete:
- *     summary: Delete a specific older version of a file (current version cannot be deleted)
+ *     summary: Delete a specific older version of a file (original sharer or project owner only; current version cannot be deleted)
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []

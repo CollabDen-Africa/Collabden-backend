@@ -209,7 +209,7 @@ const uploadProjectFile = async (projectId, userId, file, { fileId, durationSeco
           size: file.size,
           type: file.mimetype,
           durationSeconds: parsedDuration,
-          uploaderId: userId,
+          // uploaderId stays as the original sharer; each version records its own uploader.
         },
       });
 
@@ -339,7 +339,11 @@ const downloadProjectFile = streamProjectFile; // same semantics; alias for rout
 
 const deleteProjectFileVersion = async (projectId, fileId, versionId, userId) => {
   assertStorageConfigured();
-  const { file } = await assertFileAccess(projectId, fileId, userId);
+  const { project, file } = await assertFileAccess(projectId, fileId, userId);
+  // Only the original sharer or project owner can delete versions.
+  if (file.uploaderId !== userId && project.ownerId !== userId) {
+    throw httpError("You do not have permission to delete versions of this file.", 403);
+  }
   const version = await prisma.projectFileVersion.findFirst({
     where: { id: versionId, fileId },
   });
