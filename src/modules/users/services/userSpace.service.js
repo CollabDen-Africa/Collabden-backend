@@ -140,6 +140,76 @@ const fetchDmAttachments = async (userId) => {
   );
 };
 
+const fetchMyUploadedProjectFiles = async (userId) => {
+  const rows = await prisma.projectFile.findMany({
+    where: {
+      uploaderId: userId,
+      project: {
+        OR: [
+          { ownerId: userId },
+          { collaborators: { some: { userId, isActive: true } } },
+        ],
+      },
+    },
+    include: {
+      project: { select: { id: true, name: true } },
+    },
+  });
+
+  return Promise.all(
+    rows.map(async (pf) => {
+      const url = await signUrl(PROJECT_FILES_BUCKET, pf.url);
+      return {
+        id: pf.id,
+        type: "my-file",
+        title: pf.name,
+        mimeType: pf.type,
+        size: pf.size,
+        url,
+        project: pf.project,
+        createdAt: pf.createdAt,
+        meta: {
+          source: "project",
+          projectFileId: pf.id,
+        },
+      };
+    })
+  );
+};
+
+const fetchMySentDmAttachments = async (userId) => {
+  const rows = await prisma.directMessageAttachment.findMany({
+    where: {
+      message: { senderId: userId },
+    },
+    include: {
+      message: { select: { id: true, chatId: true, senderId: true } },
+    },
+  });
+
+  return Promise.all(
+    rows.map(async (a) => {
+      const url = isStorageKey(a.url) ? await signUrl(DIRECT_MESSAGE_ATTACHMENTS_BUCKET, a.url) : a.url;
+      return {
+        id: a.id,
+        type: "my-file",
+        title: a.name || "Attachment",
+        mimeType: a.mimeType,
+        size: a.size,
+        url,
+        project: null,
+        createdAt: a.createdAt,
+        meta: {
+          source: "dm",
+          messageId: a.message.id,
+          chatId: a.message.chatId,
+          senderId: a.message.senderId,
+        },
+      };
+    })
+  );
+};
+
 const getUserSpace = async (userId, query = {}) => {
   const {
     page = 1,
@@ -156,9 +226,14 @@ const getUserSpace = async (userId, query = {}) => {
   const parsedLimit = Math.min(100, Math.max(1, parseInt(limit) || 20));
 
   const fetchers = [];
-  if (!type || type === "agreement") fetchers.push(fetchAgreements(userId));
-  if (!type || type === "saved-file") fetchers.push(fetchSavedFiles(userId));
-  if (!type || type === "dm-attachment") fetchers.push(fetchDmAttachments(userId));
+  if (type === "my-file") {
+    fetchers.push(fetchMyUploadedProjectFiles(userId));
+    fetchers.push(fetchMySentDmAttachments(userId));
+  } else {
+    if (!type || type === "agreement") fetchers.push(fetchAgreements(userId));
+    if (!type || type === "saved-file") fetchers.push(fetchSavedFiles(userId));
+    if (!type || type === "dm-attachment") fetchers.push(fetchDmAttachments(userId));
+  }
 
   const results = (await Promise.all(fetchers)).flat();
 

@@ -14,6 +14,7 @@ const {
   getPlatformMarketplaceSettings,
   getPlatformUserSettings,
 } = require("../../../services/platformSettings.service");
+const { resolveMessageVoiceUrls } = require("../../messaging/services/voiceUpload.service");
 
 const checkConnection = async (userId, targetId) => {
   const connection = await prisma.userConnection.findFirst({
@@ -516,6 +517,12 @@ const getProjectListService = async (userId, filters = {}) => {
     take,
   });
 
+  await Promise.all(
+    projects.map((p) =>
+      p.messages && p.messages.length > 0 ? resolveMessageVoiceUrls(p.messages) : null,
+    ),
+  );
+
   return {
     projects,
     meta: {
@@ -603,6 +610,8 @@ const getProjectDetailsService = async (projectId, userId) => {
       sender: sendersById.get(message.senderId) || null,
     }));
   }
+
+  await resolveMessageVoiceUrls(project.messages);
 
   return project;
 };
