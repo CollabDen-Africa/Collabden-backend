@@ -81,6 +81,9 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.AGREEMENT_UPLOADED,
     EVENT_TYPES.AGREEMENT_PENDING_SIGNATURE,
     EVENT_TYPES.AGREEMENT_SIGNED,
+    EVENT_TYPES.AGREEMENT_CANCELLATION_REQUESTED,
+    EVENT_TYPES.AGREEMENT_CANCELLATION_DECLINED,
+    EVENT_TYPES.AGREEMENT_CANCELLED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe:", err.message);
@@ -175,6 +178,18 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.AGREEMENT_SIGNED:
           await handleAgreementSigned(payload);
+          break;
+
+        case EVENT_TYPES.AGREEMENT_CANCELLATION_REQUESTED:
+          await handleAgreementCancellationRequested(payload);
+          break;
+
+        case EVENT_TYPES.AGREEMENT_CANCELLATION_DECLINED:
+          await handleAgreementCancellationDeclined(payload);
+          break;
+
+        case EVENT_TYPES.AGREEMENT_CANCELLED:
+          await handleAgreementCancelled(payload);
           break;
 
         default:
@@ -877,6 +892,82 @@ const handleAgreementSigned = async ({ projectId, projectName, agreementId, agre
     message: `${signerName || 'A collaborator'} has signed the agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}".`,
     type: "AGREEMENT_SIGNED",
     link: `/projects/${projectId}/agreements/${agreementId}`,
+  });
+};
+
+// Shared helper: in-app notification + WebSocket push to a specific set of users.
+const notifyUsers = async ({ recipientIds = [], title, message, type, link }) => {
+  for (const recipientId of new Set(recipientIds)) {
+    const canSendInApp = await shouldSend(recipientId, "inApp");
+    if (!canSendInApp) continue;
+
+    const notification = await createNotification({ userId: recipientId, title, message, type, link });
+    sendToUser(recipientId, { type: "NOTIFICATION", data: notification });
+  }
+};
+
+/**
+ * Handle AGREEMENT_CANCELLATION_REQUESTED event —
+ * ask every party who has not yet consented to approve or decline the cancellation.
+ */
+const handleAgreementCancellationRequested = async ({ projectId, projectName, agreementId, agreementTitle, requesterId, reason, recipientIds }) => {
+  console.log(`[Listener] Processing AGREEMENT_CANCELLATION_REQUESTED for agreement ${agreementId}`);
+
+  const requesterName = getUserName(await getUserForNotification(requesterId));
+  const message = `${requesterName} has requested to cancel the agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}".${reason ? ` Reason: ${reason}` : ''} Your consent is required.`;
+  const link = `/projects/${projectId}/agreements/${agreementId}`;
+
+  await notifyUsers({
+    recipientIds,
+    title: "Agreement Cancellation Requested",
+    message,
+    type: "AGREEMENT_CANCELLATION_REQUESTED",
+    link,
+  });
+
+  for (const recipientId of new Set(recipientIds)) {
+    await sendInvitationEmail({
+      recipientId,
+      subject: "Agreement cancellation requested on CollabDen",
+      heading: "Your consent is needed",
+      message,
+      link,
+      actionLabel: "Review request",
+    });
+  }
+};
+
+/**
+ * Handle AGREEMENT_CANCELLATION_DECLINED event —
+ * tell the other parties the request was declined or withdrawn.
+ */
+const handleAgreementCancellationDeclined = async ({ projectId, projectName, agreementId, agreementTitle, withdrawn, recipientIds }) => {
+  console.log(`[Listener] Processing AGREEMENT_CANCELLATION_DECLINED for agreement ${agreementId}`);
+
+  await notifyUsers({
+    recipientIds,
+    title: withdrawn ? "Agreement Cancellation Withdrawn" : "Agreement Cancellation Declined",
+    message: withdrawn
+      ? `The request to cancel the agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}" was withdrawn.`
+      : `A party declined to cancel the agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}". The agreement remains in force.`,
+    type: "AGREEMENT_CANCELLATION_DECLINED",
+    link: `/projects/${projectId}/agreements/${agreementId}`,
+  });
+};
+
+/**
+ * Handle AGREEMENT_CANCELLED event —
+ * tell every party the agreement is now cancelled.
+ */
+const handleAgreementCancelled = async ({ projectId, projectName, agreementId, agreementTitle, recipientIds }) => {
+  console.log(`[Listener] Processing AGREEMENT_CANCELLED for agreement ${agreementId}`);
+
+  await notifyUsers({
+    recipientIds,
+    title: "Agreement Cancelled",
+    message: `All parties agreed to cancel the agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}".`,
+    type: "AGREEMENT_CANCELLED",
+    link: `/projects/${projectId}/agreements`,
   });
 };
 

@@ -43,6 +43,21 @@ const configureEscrowSchema = z.object({
 });
 
 /**
+ * Schema for editing escrow terms before funding. Milestones and totalAmount
+ * replace the existing terms wholesale; reviewPeriodDays and agreementId keep
+ * their current values when omitted.
+ */
+const updateEscrowSchema = configureEscrowSchema.extend({
+  agreementId: z.string().min(1, "Agreement ID cannot be empty").optional(),
+  reviewPeriodDays: z
+    .number()
+    .int()
+    .min(1, "Review period must be at least 1 day")
+    .max(30, "Review period cannot exceed 30 days")
+    .optional(),
+});
+
+/**
  * Schema for approving, requesting changes, or rejecting an escrow proposal.
  */
 const approveEscrowSchema = z.object({
@@ -87,6 +102,7 @@ const resolveDisputeSchema = z.object({
 
 module.exports = {
   configureEscrowSchema,
+  updateEscrowSchema,
   approveEscrowSchema,
   submitMilestoneSchema,
   disputeMilestoneSchema,

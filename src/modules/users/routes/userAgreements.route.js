@@ -67,7 +67,7 @@ const router = Router();
  *         name: status
  *         schema:
  *           type: string
- *           enum: [DRAFT, PENDING_SIGNATURE, SIGNED, EXPIRED]
+ *           enum: [DRAFT, PENDING_SIGNATURE, SIGNED, EXPIRED, CANCELLED]
  *         description: Filter to only agreements with this status.
  *         example: PENDING_SIGNATURE
  *       - in: query

@@ -17,6 +17,9 @@ const registerEscrowListeners = (subscriberClient) => {
     EVENT_TYPES.MILESTONE_DISPUTED,
     EVENT_TYPES.ESCROW_PAYMENT_RELEASED,
     EVENT_TYPES.ESCROW_AUTO_RELEASED,
+    EVENT_TYPES.ESCROW_APPROVAL_REMINDER,
+    EVENT_TYPES.ESCROW_TERMS_UPDATED,
+    EVENT_TYPES.ESCROW_COLLABORATOR_REMOVED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe to escrow events:", err.message);
@@ -59,6 +62,18 @@ const registerEscrowListeners = (subscriberClient) => {
 
         case EVENT_TYPES.ESCROW_AUTO_RELEASED:
           await handleEscrowAutoReleased(payload);
+          break;
+
+        case EVENT_TYPES.ESCROW_APPROVAL_REMINDER:
+          await handleEscrowApprovalReminder(payload);
+          break;
+
+        case EVENT_TYPES.ESCROW_TERMS_UPDATED:
+          await handleEscrowTermsUpdated(payload);
+          break;
+
+        case EVENT_TYPES.ESCROW_COLLABORATOR_REMOVED:
+          await handleEscrowCollaboratorRemoved(payload);
           break;
       }
     } catch (error) {
@@ -226,6 +241,63 @@ const handleEscrowAutoReleased = async ({ milestoneTitle, projectName, collabora
     type: "WALLET_UPDATED",
     data: { balance: newWalletBalance, reference: paymentReference },
   });
+};
+
+/**
+ * Handle ESCROW_APPROVAL_REMINDER:
+ * - Remind a collaborator that the escrow proposal is still waiting for their review.
+ */
+const handleEscrowApprovalReminder = async ({ projectId, projectName, collaboratorId, amount }) => {
+  console.log(`[Listener] Processing ESCROW_APPROVAL_REMINDER for user ${collaboratorId}`);
+
+  const notification = await createNotification({
+    userId: collaboratorId,
+    title: "Reminder: Review Escrow Proposal",
+    message: `The escrow proposal for project "${projectName}" is still waiting for your review. Your allocation: ₦${Number(amount).toLocaleString()}. Funding can't proceed until every collaborator approves.`,
+    type: "ESCROW_APPROVAL_REMINDER",
+    link: `/projects/${projectId}/escrow`,
+  });
+
+  sendToUser(collaboratorId, { type: "NOTIFICATION", data: notification });
+  sendToUser(collaboratorId, { type: "ESCROW_APPROVAL_REMINDER", data: { projectId, projectName, amount } });
+};
+
+/**
+ * Handle ESCROW_TERMS_UPDATED:
+ * - Tell each collaborator the terms changed and their approval was reset.
+ */
+const handleEscrowTermsUpdated = async ({ projectId, projectName, collaboratorId, amount, totalAmount }) => {
+  console.log(`[Listener] Processing ESCROW_TERMS_UPDATED for user ${collaboratorId}`);
+
+  const notification = await createNotification({
+    userId: collaboratorId,
+    title: "Escrow Terms Updated",
+    message: `The escrow terms for project "${projectName}" were updated (total ₦${Number(totalAmount).toLocaleString()}). Your allocation: ₦${Number(amount).toLocaleString()}. Please review and approve the new terms.`,
+    type: "ESCROW_TERMS_UPDATED",
+    link: `/projects/${projectId}/escrow`,
+  });
+
+  sendToUser(collaboratorId, { type: "NOTIFICATION", data: notification });
+  sendToUser(collaboratorId, { type: "ESCROW_TERMS_UPDATED", data: { projectId, projectName, amount, totalAmount } });
+};
+
+/**
+ * Handle ESCROW_COLLABORATOR_REMOVED:
+ * - Tell a collaborator they are no longer part of the escrow proposal.
+ */
+const handleEscrowCollaboratorRemoved = async ({ projectId, projectName, collaboratorId }) => {
+  console.log(`[Listener] Processing ESCROW_COLLABORATOR_REMOVED for user ${collaboratorId}`);
+
+  const notification = await createNotification({
+    userId: collaboratorId,
+    title: "Removed from Escrow Proposal",
+    message: `You were removed from the escrow proposal for project "${projectName}". You remain a collaborator on the project.`,
+    type: "ESCROW_COLLABORATOR_REMOVED",
+    link: `/projects/${projectId}`,
+  });
+
+  sendToUser(collaboratorId, { type: "NOTIFICATION", data: notification });
+  sendToUser(collaboratorId, { type: "ESCROW_COLLABORATOR_REMOVED", data: { projectId, projectName } });
 };
 
 module.exports = { registerEscrowListeners };

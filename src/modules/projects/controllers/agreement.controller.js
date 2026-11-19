@@ -10,6 +10,9 @@ const {
   getAgreementPermissionsService,
   updateAgreementPermissionService,
   getUserAgreementActivityService,
+  requestAgreementCancellationService,
+  respondToAgreementCancellationService,
+  deleteAgreementService,
 } = require('../services/agreement.service');
 
 const uploadAgreementHandler = async (req, res) => {
@@ -181,6 +184,63 @@ const getUserAgreementActivityHandler = async (req, res) => {
   }
 };
 
+// Request mutual cancellation of an agreement (any party)
+const requestAgreementCancellationHandler = async (req, res) => {
+  try {
+    const { projectId, id } = req.params;
+    const userId = req.user.id;
+    const { reason } = req.body || {};
+
+    if (reason !== undefined && reason !== null && typeof reason !== 'string') {
+      return res.status(400).json({ error: 'Reason must be a string.' });
+    }
+
+    const agreement = await requestAgreementCancellationService(id, projectId, userId, reason?.trim());
+    const message = agreement.status === 'CANCELLED'
+      ? 'Agreement cancelled.'
+      : 'Cancellation requested. Awaiting consent from the other parties.';
+    return res.status(200).json({ message, agreement });
+  } catch (error) {
+    console.error('Error in requestAgreementCancellationHandler:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
+// Approve or decline a pending cancellation request (any party)
+const respondToAgreementCancellationHandler = async (req, res) => {
+  try {
+    const { projectId, id } = req.params;
+    const userId = req.user.id;
+    const decision = typeof req.body?.decision === 'string' ? req.body.decision.toUpperCase() : undefined;
+
+    if (!['APPROVE', 'DECLINE'].includes(decision)) {
+      return res.status(400).json({ error: 'Decision must be APPROVE or DECLINE.' });
+    }
+
+    const agreement = await respondToAgreementCancellationService(id, projectId, userId, decision);
+    let message = 'Cancellation request declined.';
+    if (agreement.status === 'CANCELLED') message = 'Agreement cancelled.';
+    else if (decision === 'APPROVE') message = 'Cancellation approved. Awaiting consent from the other parties.';
+    return res.status(200).json({ message, agreement });
+  } catch (error) {
+    console.error('Error in respondToAgreementCancellationHandler:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
+const deleteAgreementHandler = async (req, res) => {
+  try {
+    const { projectId, id } = req.params;
+    const userId = req.user.id;
+
+    await deleteAgreementService(id, projectId, userId);
+    return res.status(200).json({ message: 'Agreement deleted successfully.' });
+  } catch (error) {
+    console.error('Error in deleteAgreementHandler:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+  }
+};
+
 module.exports = {
   uploadAgreementHandler,
   getAgreementsHandler,
@@ -193,4 +253,7 @@ module.exports = {
   getAgreementPermissionsHandler,
   updateAgreementPermissionHandler,
   getUserAgreementActivityHandler,
+  requestAgreementCancellationHandler,
+  respondToAgreementCancellationHandler,
+  deleteAgreementHandler,
 };

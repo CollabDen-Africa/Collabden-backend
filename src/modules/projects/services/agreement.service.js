@@ -4,6 +4,13 @@ const { uploadAgreement: uploadToSupabase } = require('../../../lib/uploadAgreem
 const { sendEmail } = require('../../../utils/sendEmail');
 const { publishEvent } = require('../../../events/publisher');
 const EVENT_TYPES = require('../../../events/eventTypes');
+const {
+  getAgreementPartyIds,
+  getPendingCancellationPartyIds,
+  isCancellationPending,
+  getAgreementDeletionBlocker,
+  buildCancellationSummary,
+} = require('../../../helpers/agreementLifecycle');
 
 async function getAgreementAttachment(filePath, title) {
   if (!filePath || !supabase) return null;
@@ -141,6 +148,7 @@ const updateAgreementStatusService = async (id, status, userId) => {
     PENDING_SIGNATURE: [],
     SIGNED: [],
     EXPIRED: [],
+    CANCELLED: [],
   };
 
   const agreement = await prisma.legalAgreement.findUnique({
@@ -210,6 +218,12 @@ const uploadSignedAgreementService = async (id, file, userId) => {
 
   if (agreement.status === 'SIGNED') {
     const error = new Error('Agreement is already signed and locked.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (agreement.status === 'CANCELLED') {
+    const error = new Error('This agreement has been cancelled and can no longer be signed.');
     error.status = 400;
     throw error;
   }
@@ -316,6 +330,12 @@ const esignAgreementService = async (id, userId, intentToSign) => {
     throw error;
   }
 
+  if (agreement.status === 'CANCELLED') {
+    const error = new Error('This agreement has been cancelled and can no longer be signed.');
+    error.status = 400;
+    throw error;
+  }
+
   const user = await prisma.userProfile.findUnique({ where: { id: userId } });
   if (!user) {
     const error = new Error('User not found.');
@@ -414,6 +434,12 @@ const editAgreementService = async (id, file, updateData, userId) => {
     throw error;
   }
 
+  if (agreement.status === 'CANCELLED') {
+    const error = new Error('Cannot edit a cancelled agreement.');
+    error.status = 400;
+    throw error;
+  }
+
   const hasExistingSignatures = agreement.signatures.length > 0;
 
   const isOwner = agreement.project.ownerId === userId;
@@ -440,6 +466,11 @@ const editAgreementService = async (id, file, updateData, userId) => {
   if (updateData.status) {
     if (updateData.status === 'SIGNED') {
       const error = new Error('Cannot set status to SIGNED through edit endpoint.');
+      error.status = 400;
+      throw error;
+    }
+    if (updateData.status === 'CANCELLED') {
+      const error = new Error('Agreements can only be cancelled through the cancellation request flow.');
       error.status = 400;
       throw error;
     }
@@ -763,7 +794,19 @@ const getUserAgreementActivityService = async (userId, query = {}) => {
 
   const projectIds = userProjects.map(p => p.id);
 
-  const agreementActions = ['AGREEMENT_UPLOADED', 'AGREEMENT_EDITED', 'AGREEMENT_SIGNED', 'AGREEMENT_STATUS_UPDATED', 'AGREEMENT_PERMISSION_UPDATED'];
+  const agreementActions = [
+    'AGREEMENT_UPLOADED',
+    'AGREEMENT_EDITED',
+    'AGREEMENT_SIGNED',
+    'AGREEMENT_STATUS_UPDATED',
+    'AGREEMENT_PERMISSION_UPDATED',
+    'AGREEMENT_CANCELLATION_REQUESTED',
+    'AGREEMENT_CANCELLATION_APPROVED',
+    'AGREEMENT_CANCELLATION_DECLINED',
+    'AGREEMENT_CANCELLATION_WITHDRAWN',
+    'AGREEMENT_CANCELLED',
+    'AGREEMENT_DELETED',
+  ];
 
   const whereClause = {
     projectId: { in: projectIds },
@@ -791,6 +834,267 @@ const getUserAgreementActivityService = async (userId, query = {}) => {
   };
 };
 
+// Loads an agreement with everything the cancellation/deletion rules need,
+// scoped to the project in the URL so access to one project can't reach another's agreements.
+const loadAgreementForLifecycle = async (id, projectId) => {
+  const agreement = await prisma.legalAgreement.findUnique({
+    where: { id },
+    include: {
+      project: { select: { ownerId: true, name: true } },
+      signatures: { select: { userId: true } },
+      escrows: { select: { id: true, status: true } },
+    },
+  });
+
+  if (!agreement || agreement.projectId !== projectId) {
+    const error = new Error('Agreement not found.');
+    error.status = 404;
+    throw error;
+  }
+
+  return agreement;
+};
+
+const withCancellationSummary = (agreement, partyIds) => ({
+  ...agreement,
+  cancellation: buildCancellationSummary(agreement, partyIds),
+});
+
+const finalizeAgreementCancellation = async (agreement, partyIds, actorId) => {
+  const cancelledAt = new Date();
+
+  // Guard against two final approvals racing each other: only one may flip the status.
+  const { count } = await prisma.legalAgreement.updateMany({
+    where: { id: agreement.id, status: { not: 'CANCELLED' } },
+    data: {
+      status: 'CANCELLED',
+      cancelledAt,
+      auditMetadata: {
+        ...(agreement.auditMetadata || {}),
+        cancellation: {
+          cancelledAt: cancelledAt.toISOString(),
+          requestedById: agreement.cancellationRequestedById,
+          approvedBy: agreement.cancellationApprovals,
+          reason: agreement.cancellationReason,
+        },
+      },
+    },
+  });
+
+  const cancelledAgreement = await prisma.legalAgreement.findUnique({ where: { id: agreement.id } });
+  if (count === 0) return withCancellationSummary(cancelledAgreement, partyIds);
+
+  await prisma.activityLog.create({
+    data: {
+      projectId: agreement.projectId,
+      action: 'AGREEMENT_CANCELLED',
+      details: `Agreement "${agreement.title || 'Untitled'}" was cancelled with the consent of all parties.`,
+    }
+  });
+
+  await publishEvent(EVENT_TYPES.AGREEMENT_CANCELLED, {
+    projectId: agreement.projectId,
+    projectName: agreement.project.name,
+    agreementId: agreement.id,
+    agreementTitle: agreement.title,
+    recipientIds: partyIds.filter(id => id !== actorId),
+  });
+
+  return withCancellationSummary(cancelledAgreement, partyIds);
+};
+
+// A party (project owner or signer) asks to cancel the agreement. The requester's
+// consent is recorded immediately; the agreement is cancelled once every party consents.
+const requestAgreementCancellationService = async (id, projectId, userId, reason) => {
+  const agreement = await loadAgreementForLifecycle(id, projectId);
+
+  if (agreement.status === 'CANCELLED') {
+    const error = new Error('Agreement is already cancelled.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (agreement.escrows.length > 0) {
+    const error = new Error("This agreement backs the project's escrow and cannot be cancelled.");
+    error.status = 400;
+    throw error;
+  }
+
+  const partyIds = getAgreementPartyIds(agreement);
+  if (!partyIds.includes(userId)) {
+    const error = new Error('Only parties to this agreement (the project owner and signers) can request cancellation.');
+    error.status = 403;
+    throw error;
+  }
+
+  if (isCancellationPending(agreement)) {
+    const error = new Error('A cancellation request is already pending for this agreement.');
+    error.status = 400;
+    throw error;
+  }
+
+  const updatedAgreement = await prisma.legalAgreement.update({
+    where: { id },
+    data: {
+      cancellationRequestedById: userId,
+      cancellationRequestedAt: new Date(),
+      cancellationReason: reason || null,
+      cancellationApprovals: [userId],
+      cancelledAt: null,
+    },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      projectId: agreement.projectId,
+      action: 'AGREEMENT_CANCELLATION_REQUESTED',
+      details: `Cancellation was requested for agreement "${agreement.title || 'Untitled'}".${reason ? ` Reason: ${reason}` : ''}`,
+    }
+  });
+
+  const pendingPartyIds = getPendingCancellationPartyIds(partyIds, updatedAgreement.cancellationApprovals);
+  if (pendingPartyIds.length === 0) {
+    return finalizeAgreementCancellation({ ...updatedAgreement, project: agreement.project }, partyIds, userId);
+  }
+
+  await publishEvent(EVENT_TYPES.AGREEMENT_CANCELLATION_REQUESTED, {
+    projectId: agreement.projectId,
+    projectName: agreement.project.name,
+    agreementId: id,
+    agreementTitle: agreement.title,
+    requesterId: userId,
+    reason: reason || null,
+    recipientIds: pendingPartyIds,
+  });
+
+  return withCancellationSummary(updatedAgreement, partyIds);
+};
+
+// A party approves or declines a pending cancellation request. When the requester
+// declines their own request, it is treated as a withdrawal.
+const respondToAgreementCancellationService = async (id, projectId, userId, decision) => {
+  const agreement = await loadAgreementForLifecycle(id, projectId);
+
+  if (agreement.status === 'CANCELLED') {
+    const error = new Error('Agreement is already cancelled.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!isCancellationPending(agreement)) {
+    const error = new Error('There is no pending cancellation request for this agreement.');
+    error.status = 400;
+    throw error;
+  }
+
+  const partyIds = getAgreementPartyIds(agreement);
+  if (!partyIds.includes(userId)) {
+    const error = new Error('Only parties to this agreement (the project owner and signers) can respond to a cancellation request.');
+    error.status = 403;
+    throw error;
+  }
+
+  if (decision === 'DECLINE') {
+    const isWithdrawal = agreement.cancellationRequestedById === userId;
+
+    const updatedAgreement = await prisma.legalAgreement.update({
+      where: { id },
+      data: {
+        cancellationRequestedById: null,
+        cancellationRequestedAt: null,
+        cancellationReason: null,
+        cancellationApprovals: [],
+      },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        projectId: agreement.projectId,
+        action: isWithdrawal ? 'AGREEMENT_CANCELLATION_WITHDRAWN' : 'AGREEMENT_CANCELLATION_DECLINED',
+        details: isWithdrawal
+          ? `The cancellation request for agreement "${agreement.title || 'Untitled'}" was withdrawn.`
+          : `The cancellation request for agreement "${agreement.title || 'Untitled'}" was declined. The agreement remains in force.`,
+      }
+    });
+
+    await publishEvent(EVENT_TYPES.AGREEMENT_CANCELLATION_DECLINED, {
+      projectId: agreement.projectId,
+      projectName: agreement.project.name,
+      agreementId: id,
+      agreementTitle: agreement.title,
+      withdrawn: isWithdrawal,
+      recipientIds: partyIds.filter(pid => pid !== userId),
+    });
+
+    return withCancellationSummary(updatedAgreement, partyIds);
+  }
+
+  if (agreement.cancellationApprovals.includes(userId)) {
+    const error = new Error('You have already approved this cancellation request.');
+    error.status = 400;
+    throw error;
+  }
+
+  const updatedAgreement = await prisma.legalAgreement.update({
+    where: { id },
+    data: { cancellationApprovals: { push: userId } },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      projectId: agreement.projectId,
+      action: 'AGREEMENT_CANCELLATION_APPROVED',
+      details: `A party approved the cancellation of agreement "${agreement.title || 'Untitled'}".`,
+    }
+  });
+
+  const pendingPartyIds = getPendingCancellationPartyIds(partyIds, updatedAgreement.cancellationApprovals);
+  if (pendingPartyIds.length === 0) {
+    return finalizeAgreementCancellation({ ...updatedAgreement, project: agreement.project }, partyIds, userId);
+  }
+
+  return withCancellationSummary(updatedAgreement, partyIds);
+};
+
+// Owner-only. Unsigned drafts can be deleted directly; anything signed must be
+// cancelled by all parties first. Agreements backing an escrow are kept for audit.
+const deleteAgreementService = async (id, projectId, userId) => {
+  const agreement = await loadAgreementForLifecycle(id, projectId);
+
+  if (agreement.project.ownerId !== userId) {
+    const error = new Error('Only the project owner can delete agreements.');
+    error.status = 403;
+    throw error;
+  }
+
+  const blocker = getAgreementDeletionBlocker(agreement);
+  if (blocker) {
+    const error = new Error(blocker);
+    error.status = 400;
+    throw error;
+  }
+
+  await prisma.legalAgreement.delete({ where: { id } });
+
+  if (agreement.filePath && supabase) {
+    const { error: removeError } = await supabase.storage.from('agreements').remove([agreement.filePath]);
+    if (removeError) {
+      // The record is gone either way; an orphaned file must not fail the request.
+      console.error(`Failed to remove agreement file ${agreement.filePath}:`, removeError.message);
+    }
+  }
+
+  await prisma.activityLog.create({
+    data: {
+      projectId: agreement.projectId,
+      action: 'AGREEMENT_DELETED',
+      details: `Agreement "${agreement.title || 'Untitled'}" was deleted.`,
+    }
+  });
+
+  return { id };
+};
+
 module.exports = {
   uploadAgreementService,
   getAgreementsService,
@@ -803,4 +1107,7 @@ module.exports = {
   getAgreementPermissionsService,
   updateAgreementPermissionService,
   getUserAgreementActivityService,
+  requestAgreementCancellationService,
+  respondToAgreementCancellationService,
+  deleteAgreementService,
 };

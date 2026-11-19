@@ -43,6 +43,50 @@ const getEscrowStatus = async (req, res) => {
   }
 };
 
+const updateEscrowTerms = async (req, res) => {
+  try {
+    const result = await escrowService.updateEscrowTerms(
+      req.params.projectId,
+      req.user.id,
+      req.body
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    const status = error.message.includes("not found") ? 404 : 400;
+    res.status(status).json({ error: error.message });
+  }
+};
+
+const remindEscrowCollaborator = async (req, res) => {
+  try {
+    const result = await escrowService.remindEscrowCollaborator(
+      req.params.projectId,
+      req.user.id,
+      req.params.userId
+    );
+    res.status(200).json({ message: "Reminder sent.", ...result });
+  } catch (error) {
+    let status = 400;
+    if (error.message.includes("not found")) status = 404;
+    else if (error.message.includes("already reminded")) status = 429;
+    res.status(status).json({ error: error.message });
+  }
+};
+
+const removeEscrowCollaborator = async (req, res) => {
+  try {
+    const result = await escrowService.removeEscrowCollaborator(
+      req.params.projectId,
+      req.user.id,
+      req.params.userId
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    const status = error.message.includes("not found") ? 404 : 400;
+    res.status(status).json({ error: error.message });
+  }
+};
+
 const approveEscrowProposal = async (req, res) => {
   try {
     const result = await escrowService.approveEscrowProposal(
@@ -173,6 +217,9 @@ module.exports = {
   configureEscrow,
   getProjectEscrow,
   getEscrowStatus,
+  updateEscrowTerms,
+  remindEscrowCollaborator,
+  removeEscrowCollaborator,
   approveEscrowProposal,
   fundEscrow,
   submitMilestone,

@@ -336,6 +336,7 @@ const listChats = async (userId) => {
 
       return {
         id: chat.id,
+        type: "CHAT",
         otherParticipant,
         isArchived,
         lastMessage,
