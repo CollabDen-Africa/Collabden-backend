@@ -133,6 +133,7 @@ model ProjectMessage {
   messageType   ProjectMessageType         @default(TEXT)
   voiceUrl      String?
   voiceDuration Int?
+  voiceSize     Int?
   parentId      String?
   parent        ProjectMessage?            @relation("ProjectMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
   replies       ProjectMessage[]           @relation("ProjectMessageReplies")

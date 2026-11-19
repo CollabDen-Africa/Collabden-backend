@@ -24,6 +24,9 @@ const {
   uploadMessageAttachment: uploadMessageAttachmentService,
 } = require("../services/projectMessageAttachments.service");
 const {
+  uploadProjectVoiceNote: uploadProjectVoiceNoteService,
+} = require("../services/projectVoiceUpload.service");
+const {
   createTask: createTaskService,
   listTasks: listTasksService,
   getTaskDetails: getTaskDetailsService,
@@ -271,6 +274,24 @@ const uploadProjectMessageAttachment = async (req, res) => {
   } catch (error) {
     const body = { error: error.message, code: error.code };
     for (const k of ["usedBytes", "filesBytes", "chatBytes", "limitBytes", "upgradeTo"]) {
+      if (error[k] !== undefined) body[k] = error[k];
+    }
+    return res.status(error.status || 500).json(body);
+  }
+};
+
+const uploadProjectVoiceNote = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No voice file uploaded. Include a file in the 'voice' field." });
+    }
+    const result = await uploadProjectVoiceNoteService(req.params.id, req.user.id, req.file, {
+      durationSeconds: req.body?.durationSeconds,
+    });
+    return res.status(201).json(result);
+  } catch (error) {
+    const body = { error: error.message, code: error.code };
+    for (const k of ["usedBytes", "filesBytes", "chatBytes", "voiceBytes", "limitBytes", "upgradeTo"]) {
       if (error[k] !== undefined) body[k] = error[k];
     }
     return res.status(error.status || 500).json(body);
@@ -644,6 +665,7 @@ module.exports = {
   markProjectMessagesRead,
   reactToProjectMessage,
   uploadProjectMessageAttachment,
+  uploadProjectVoiceNote,
   createProjectTask,
   listProjectTasks,
   getProjectTaskDetails,

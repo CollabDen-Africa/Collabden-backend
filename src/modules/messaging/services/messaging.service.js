@@ -300,7 +300,6 @@ const listChats = async (userId) => {
         select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
       },
     },
-    orderBy: { updatedAt: "desc" },
   });
 
   const chatDetails = await Promise.all(
@@ -347,7 +346,52 @@ const listChats = async (userId) => {
     })
   );
 
-  return chatDetails;
+  // Include pending message requests the user has sent, so the sender sees the
+  // conversation they started while waiting for the recipient to respond.
+  const chatPartnerIds = new Set(chatDetails.map((chat) => chat.otherParticipant?.id));
+  const sentRequests = await prisma.messageRequest.findMany({
+    where: { senderId: userId, status: "PENDING" },
+    include: {
+      receiver: {
+        select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const requestDetails = sentRequests
+    .filter((request) => !chatPartnerIds.has(request.receiverId))
+    .map((request) => ({
+      id: request.id,
+      type: "MESSAGE_REQUEST",
+      requestStatus: request.status,
+      otherParticipant: request.receiver,
+      isArchived: false,
+      lastMessage: {
+        id: request.id,
+        chatId: null,
+        senderId: request.senderId,
+        content: request.message,
+        voiceUrl: null,
+        voiceDuration: null,
+        isRead: false,
+        parentId: null,
+        parent: null,
+        attachments: [],
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+      },
+      unreadCount: 0,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+    }));
+
+  const activityTimestamp = (item) =>
+    new Date(item.lastMessage?.createdAt ?? item.createdAt).getTime();
+
+  return [...chatDetails, ...requestDetails].sort(
+    (a, b) => activityTimestamp(b) - activityTimestamp(a)
+  );
 };
 
 /**

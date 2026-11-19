@@ -41,20 +41,31 @@ const sumMessageAttachmentBytes = async (ownerId) => {
   return result._sum.size || 0;
 };
 
+const sumMessageVoiceBytes = async (ownerId) => {
+  const result = await prisma.projectMessage.aggregate({
+    _sum: { voiceSize: true },
+    where: { project: { ownerId } },
+  });
+  return result._sum.voiceSize || 0;
+};
+
 /**
  * Returns the full breakdown of bytes owned by a user across every project they own.
  * `filesBytes` counts every ProjectFileVersion (current + history).
  * `chatBytes` counts every ProjectMessageAttachment.
+ * `voiceBytes` counts every ProjectMessage.voiceSize.
  */
 const getOwnerStorageBreakdown = async (ownerId) => {
-  const [filesBytes, chatBytes] = await Promise.all([
+  const [filesBytes, chatBytes, voiceBytes] = await Promise.all([
     sumProjectFileBytes(ownerId),
     sumMessageAttachmentBytes(ownerId),
+    sumMessageVoiceBytes(ownerId),
   ]);
   return {
     filesBytes,
     chatBytes,
-    totalBytes: filesBytes + chatBytes,
+    voiceBytes,
+    totalBytes: filesBytes + chatBytes + voiceBytes,
   };
 };
 
@@ -66,6 +77,7 @@ const buildStoragePayload = async (owner) => {
     tier: owner.tier,
     filesBytes: breakdown.filesBytes,
     chatBytes: breakdown.chatBytes,
+    voiceBytes: breakdown.voiceBytes,
     usedBytes: breakdown.totalBytes,
     totalBytes: breakdown.totalBytes,
     limitBytes,
@@ -112,6 +124,7 @@ const assertOwnerCanAbsorb = async ({
         usedBytes: breakdown.totalBytes,
         filesBytes: breakdown.filesBytes,
         chatBytes: breakdown.chatBytes,
+        voiceBytes: breakdown.voiceBytes,
         limitBytes,
         upgradeTo: nextTier(owner.tier),
       }
