@@ -16,6 +16,7 @@ const {
   markProjectMessagesRead,
   reactToProjectMessage,
   uploadProjectMessageAttachment,
+  uploadProjectVoiceNote,
   createProjectTask,
   listProjectTasks,
   getProjectTaskDetails,
@@ -56,6 +57,7 @@ const {
 const router = Router();
 const { MAX_FILE_UPLOAD_MB } = require("../../../config/constants");
 const { MAX_ATTACHMENT_BYTES } = require("../services/projectMessageAttachments.service");
+const { MAX_VOICE_BYTES } = require("../../messaging/services/voiceUpload.service");
 const projectFileUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_UPLOAD_MB * 1024 * 1024 },
@@ -64,6 +66,18 @@ const projectFileUpload = multer({
 const messageAttachmentUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_ATTACHMENT_BYTES },
+});
+
+const projectVoiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_VOICE_BYTES },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith("audio/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only audio files are allowed for voice notes."), false);
+    }
+  },
 });
 
 const coverImageUpload = multer({
@@ -646,6 +660,51 @@ router.post(
   "/:id/messages/attachments",
   messageAttachmentUpload.single("file"),
   uploadProjectMessageAttachment,
+);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/messages/voice:
+ *   post:
+ *     summary: Upload a voice note scoped to a project
+ *     description: >
+ *       Validates the project owner has quota headroom, then uploads the recorded
+ *       audio clip to Supabase storage and returns the storage path plus a short-lived
+ *       signed URL. Submit the returned `path` as `voiceUrl` and `size` as `voiceSize`
+ *       when calling `POST /projects/:id/messages`.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               voice:
+ *                 type: string
+ *                 format: binary
+ *               durationSeconds:
+ *                 type: number
+ *     responses:
+ *       201:
+ *         description: Voice note uploaded
+ *       400:
+ *         description: Missing file, unsupported type, or invalid duration
+ *       413:
+ *         description: File too large or storage quota exceeded
+ */
+router.post(
+  "/:id/messages/voice",
+  projectVoiceUpload.single("voice"),
+  uploadProjectVoiceNote,
 );
 
 /**

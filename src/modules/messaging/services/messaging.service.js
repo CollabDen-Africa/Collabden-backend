@@ -300,7 +300,6 @@ const listChats = async (userId) => {
         select: { id: true, email: true, firstName: true, lastName: true, displayName: true },
       },
     },
-    orderBy: { updatedAt: "desc" },
   });
 
   const chatDetails = await Promise.all(
@@ -388,8 +387,11 @@ const listChats = async (userId) => {
       updatedAt: request.updatedAt,
     }));
 
+  const activityTimestamp = (item) =>
+    new Date(item.lastMessage?.createdAt ?? item.createdAt).getTime();
+
   return [...chatDetails, ...requestDetails].sort(
-    (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+    (a, b) => activityTimestamp(b) - activityTimestamp(a)
   );
 };
 

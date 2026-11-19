@@ -29,8 +29,13 @@ const router = Router();
  *         schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
  *       - in: query
  *         name: type
- *         schema: { type: string, enum: [agreement, saved-file, dm-attachment] }
- *         description: Filter to a single item type. Omit to return all three.
+ *         schema: { type: string, enum: [agreement, saved-file, dm-attachment, my-file] }
+ *         description: >
+ *           Filter to a single item type. Omit to return agreements, saved files and DM
+ *           attachments. Use `my-file` to get items the authenticated user personally
+ *           uploaded — project files where they are the uploader, plus DM attachments
+ *           they sent. Returned items carry `type: "my-file"` with `meta.source` of
+ *           either `"project"` or `"dm"`.
  *       - in: query
  *         name: projectName
  *         schema: { type: string }

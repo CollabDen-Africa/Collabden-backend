@@ -112,7 +112,7 @@ const sanitizeAttachments = (attachments) => {
 const sendProjectMessage = async (
   projectId,
   userId,
-  { content, parentId, voiceUrl, voiceDuration, attachments } = {}
+  { content, parentId, voiceUrl, voiceDuration, voiceSize, attachments } = {}
 ) => {
   const project = await assertProjectAccess(projectId, userId);
 
@@ -167,6 +167,7 @@ const sendProjectMessage = async (
         messageType,
         voiceUrl: hasVoice ? voiceUrl.trim() : null,
         voiceDuration: hasVoice ? Math.trunc(Number(voiceDuration)) : null,
+        voiceSize: hasVoice && Number.isFinite(Number(voiceSize)) ? Math.trunc(Number(voiceSize)) : null,
         parentId: parentId || null,
         attachments: normalizedAttachments.length
           ? { createMany: { data: normalizedAttachments } }
