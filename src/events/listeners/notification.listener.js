@@ -84,6 +84,8 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.AGREEMENT_CANCELLATION_REQUESTED,
     EVENT_TYPES.AGREEMENT_CANCELLATION_DECLINED,
     EVENT_TYPES.AGREEMENT_CANCELLED,
+    EVENT_TYPES.ROYALTY_TERMS_UPDATED,
+    EVENT_TYPES.ROYALTY_TERMS_RESPONDED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe:", err.message);
@@ -190,6 +192,14 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.AGREEMENT_CANCELLED:
           await handleAgreementCancelled(payload);
+          break;
+
+        case EVENT_TYPES.ROYALTY_TERMS_UPDATED:
+          await handleRoyaltyTermsUpdated(payload);
+          break;
+
+        case EVENT_TYPES.ROYALTY_TERMS_RESPONDED:
+          await handleRoyaltyTermsResponded(payload);
           break;
 
         default:
@@ -968,6 +978,41 @@ const handleAgreementCancelled = async ({ projectId, projectName, agreementId, a
     message: `All parties agreed to cancel the agreement "${agreementTitle || 'Untitled'}" in "${projectName || 'your project'}".`,
     type: "AGREEMENT_CANCELLED",
     link: `/projects/${projectId}/agreements`,
+  });
+};
+
+/**
+ * Handle ROYALTY_TERMS_UPDATED event —
+ * ask collaborators whose split was set or changed to review and accept it.
+ */
+const handleRoyaltyTermsUpdated = async ({ projectId, projectName, recipientIds }) => {
+  console.log(`[Listener] Processing ROYALTY_TERMS_UPDATED for project ${projectId}`);
+
+  await notifyUsers({
+    recipientIds,
+    title: "Royalty Terms Updated",
+    message: `Your royalty share in "${projectName || 'your project'}" has been set or changed. Review and accept it before signing the project agreement.`,
+    type: "ROYALTY_TERMS_UPDATED",
+    link: `/projects/${projectId}/royalties`,
+  });
+};
+
+/**
+ * Handle ROYALTY_TERMS_RESPONDED event —
+ * tell the project owner a collaborator accepted or rejected their split.
+ */
+const handleRoyaltyTermsResponded = async ({ projectId, projectName, ownerId, responderId, decision, royaltyShare, comment }) => {
+  console.log(`[Listener] Processing ROYALTY_TERMS_RESPONDED for project ${projectId}`);
+
+  const responderName = getUserName(await getUserForNotification(responderId));
+  const verb = decision === "ACCEPTED" ? "accepted" : "rejected";
+
+  await notifyUsers({
+    recipientIds: [ownerId],
+    title: decision === "ACCEPTED" ? "Royalty Terms Accepted" : "Royalty Terms Rejected",
+    message: `${responderName} ${verb} their ${royaltyShare}% royalty share in "${projectName || 'your project'}".${comment ? ` Comment: ${comment}` : ''}`,
+    type: "ROYALTY_TERMS_RESPONDED",
+    link: `/projects/${projectId}/royalties`,
   });
 };
 
