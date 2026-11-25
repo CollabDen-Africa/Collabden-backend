@@ -628,6 +628,9 @@ router.patch(
  *       - Not already signed this agreement.
  *       - `canSign: true` on their `AgreementPermission` record for this agreement
  *         (if no record exists, signing is allowed by default).
+ *       - On projects with royalty splits: accepted their own royalty split via
+ *         `POST /api/v1/projects/{projectId}/royalties/respond` (owner exempt).
+ *         Otherwise returns 403 with `code: ROYALTY_TERMS_NOT_ACCEPTED`.
  *
  *
  *       Once the agreement is SIGNED further calls return 400. The stored file is
@@ -707,6 +710,11 @@ router.patch(
  *                 summary: Permission denied
  *                 value:
  *                   error: "You do not have permission to sign this agreement."
+ *               royaltyTermsNotAccepted:
+ *                 summary: Royalty terms not accepted (projects with royalty splits)
+ *                 value:
+ *                   error: "You must accept your royalty terms for this project before signing the agreement."
+ *                   code: "ROYALTY_TERMS_NOT_ACCEPTED"
  *       404:
  *         description: Agreement not found.
  */
@@ -756,6 +764,9 @@ router.post(
  *       - A `legalName` set on their profile.
  *       - Not already signed this agreement.
  *       - `canSign: true` on their `AgreementPermission` record (default: allowed).
+ *       - On projects with royalty splits: accepted their own royalty split via
+ *         `POST /api/v1/projects/{projectId}/royalties/respond` (owner exempt).
+ *         Otherwise returns 403 with `code: ROYALTY_TERMS_NOT_ACCEPTED`.
  *     tags: [Agreements]
  *     security:
  *       - bearerAuth: []
@@ -837,6 +848,11 @@ router.post(
  *                 summary: Permission denied
  *                 value:
  *                   error: "You do not have permission to sign this agreement."
+ *               royaltyTermsNotAccepted:
+ *                 summary: Royalty terms not accepted (projects with royalty splits)
+ *                 value:
+ *                   error: "You must accept your royalty terms for this project before signing the agreement."
+ *                   code: "ROYALTY_TERMS_NOT_ACCEPTED"
  *       404:
  *         description: Agreement or user not found.
  */

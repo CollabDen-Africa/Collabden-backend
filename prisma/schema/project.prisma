@@ -14,6 +14,12 @@ enum CollaboratorRole {
   COLLABORATOR
 }
 
+enum RoyaltyApprovalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum InviteStatus {
   PENDING
   ACCEPTED
@@ -65,6 +71,10 @@ model ProjectRoyaltySplit {
   userId         String
   royaltyShare   Decimal      @db.Decimal(5, 2)
   role           String?
+  // Each collaborator must accept their own split before signing any project agreement.
+  approvalStatus  RoyaltyApprovalStatus @default(PENDING)
+  approvalComment String?
+  respondedAt     DateTime?
   project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user           UserProfile  @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())

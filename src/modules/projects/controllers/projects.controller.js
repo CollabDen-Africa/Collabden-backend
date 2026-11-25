@@ -51,6 +51,7 @@ const {
 const {
   getProjectRoyaltySplits,
   updateProjectRoyaltySplits,
+  respondToRoyaltySplit,
 } = require("../services/royalty.service");
 const { PROJECT_VISIBILITY } = require("../../../utils/constants");
 
@@ -649,6 +650,18 @@ const updateRoyaltySplits = async (req, res) => {
   }
 };
 
+const respondToRoyaltySplitHandler = async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const userId = req.user.id;
+    const { decision, comment } = req.body;
+    const split = await respondToRoyaltySplit(projectId, userId, decision, comment);
+    res.status(200).json({ message: "Royalty terms response recorded.", split });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createProject,
   uploadProjectFile,
@@ -689,5 +702,6 @@ module.exports = {
   uploadProjectCover,
   getRoyaltySplits,
   updateRoyaltySplits,
+  respondToRoyaltySplitHandler,
   saveProjectFileToSpace,
 };
