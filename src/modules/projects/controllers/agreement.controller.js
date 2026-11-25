@@ -76,7 +76,10 @@ const uploadSignedAgreementHandler = async (req, res) => {
     return res.status(200).json({ agreement });
   } catch (error) {
     console.error('Error in uploadSignedAgreementHandler:', error);
-    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({
+      error: error.message || 'Internal server error.',
+      ...(error.code && { code: error.code }),
+    });
   }
 };
 
@@ -90,7 +93,10 @@ const esignAgreementHandler = async (req, res) => {
     return res.status(200).json({ message: 'Agreement successfully e-signed.', agreement });
   } catch (error) {
     console.error('Error in esignAgreementHandler:', error);
-    return res.status(error.status || 500).json({ error: error.message || 'Internal server error.' });
+    return res.status(error.status || 500).json({
+      error: error.message || 'Internal server error.',
+      ...(error.code && { code: error.code }),
+    });
   }
 };
 

@@ -237,6 +237,8 @@ model AgreementSignature {
   agreementId String
   userId      String
   legalName   String
+  // Royalty share the signer had accepted at signing time (null when the project has no royalties).
+  royaltyShare Decimal?      @db.Decimal(5, 2)
   signedAt    DateTime       @default(now())
   agreement   LegalAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
 }

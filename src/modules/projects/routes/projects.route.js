@@ -40,6 +40,7 @@ const {
   uploadProjectCover,
   getRoyaltySplits,
   updateRoyaltySplits,
+  respondToRoyaltySplitHandler,
   saveProjectFileToSpace,
 } = require("../controllers/projects.controller");
 const { authMiddleware } = require("../../../middleware/auth.middleware");
@@ -1639,7 +1640,12 @@ router.delete("/:id", deleteProject);
  * /api/v1/projects/{id}/royalties:
  *   get:
  *     summary: Get project royalty splits
- *     description: Returns the configured master royalty share allocations for project collaborators.
+ *     description: >
+ *       Returns the configured master royalty share allocations for project collaborators,
+ *       each with its `approvalStatus` (PENDING, ACCEPTED, REJECTED). `hasRoyalties` is true once
+ *       any split exists; from then on every collaborator must accept their own split before
+ *       signing an agreement. `pendingAcceptanceFrom` lists signers who still need to accept
+ *       (including collaborators with no split assigned yet), and `allAccepted` is true when none remain.
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []
@@ -1658,7 +1664,12 @@ router.delete("/:id", deleteProject);
  *         description: Project not found
  *   put:
  *     summary: Update project royalty splits
- *     description: Configures per-collaborator master royalty percentages. Only the project owner can update splits. Total splits cannot exceed 100%.
+ *     description: >
+ *       Configures per-collaborator master royalty percentages. Only the project owner can update splits.
+ *       Total splits cannot exceed 100% and every user must be the owner or an active collaborator.
+ *       Any split whose share or role changes is reset to PENDING and must be accepted again; the
+ *       owner's own split is accepted automatically. Splits cannot be changed while any agreement on
+ *       the project has signatures (409).
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []
@@ -1698,9 +1709,57 @@ router.delete("/:id", deleteProject);
  *         description: Total percentage exceeds 100% or invalid payload
  *       403:
  *         description: Only the project owner can update royalty splits
+ *       409:
+ *         description: An agreement on the project already has signatures
  */
 router.get("/:id/royalties", getRoyaltySplits);
 router.put("/:id/royalties", updateRoyaltySplits);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/royalties/respond:
+ *   post:
+ *     summary: Accept or reject your royalty split
+ *     description: >
+ *       A collaborator accepts or rejects their own royalty split. On projects with royalty splits,
+ *       collaborators must accept before they can sign any project agreement. The owner sets the terms
+ *       and does not respond. A response cannot be changed after the collaborator has signed an agreement
+ *       on the project; if the owner changes the split, it returns to PENDING.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - decision
+ *             properties:
+ *               decision:
+ *                 type: string
+ *                 enum: [ACCEPT, REJECT]
+ *               comment:
+ *                 type: string
+ *                 description: Optional note to the owner, e.g. why the split was rejected.
+ *     responses:
+ *       200:
+ *         description: Response recorded
+ *       400:
+ *         description: Invalid decision, or the caller is the project owner
+ *       404:
+ *         description: No royalty share assigned to the caller
+ *       409:
+ *         description: Caller already signed an agreement based on these terms
+ */
+router.post("/:id/royalties/respond", respondToRoyaltySplitHandler);
 
 /**
  * @swagger

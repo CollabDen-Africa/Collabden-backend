@@ -11,6 +11,7 @@ const {
   getAgreementDeletionBlocker,
   buildCancellationSummary,
 } = require('../../../helpers/agreementLifecycle');
+const { getRoyaltySigningBlocker } = require('../../../helpers/royaltyTerms');
 
 async function getAgreementAttachment(filePath, title) {
   if (!filePath || !supabase) return null;
@@ -45,6 +46,25 @@ async function getRequiredSignerIds(projectId) {
   if (!project) return [];
   const ids = new Set([project.ownerId, ...project.collaborators.map(c => c.userId)]);
   return [...ids];
+}
+
+// Collaborators on a project with royalties must accept their own split before signing.
+// Returns the accepted share to record on the signature (null when the project has no royalties).
+async function assertRoyaltyTermsAccepted(projectId, ownerId, userId) {
+  const splits = await prisma.projectRoyaltySplit.findMany({
+    where: { projectId },
+    select: { userId: true, royaltyShare: true, approvalStatus: true },
+  });
+
+  const blocker = getRoyaltySigningBlocker({ splits, userId, ownerId });
+  if (blocker) {
+    const error = new Error(blocker);
+    error.status = 403;
+    error.code = 'ROYALTY_TERMS_NOT_ACCEPTED';
+    throw error;
+  }
+
+  return splits.find(s => s.userId === userId)?.royaltyShare ?? null;
 }
 
 async function notifyCollaborators(projectId, agreementTitle, filePath) {
@@ -249,11 +269,13 @@ const uploadSignedAgreementService = async (id, file, userId) => {
     throw error;
   }
 
+  const royaltyShare = await assertRoyaltyTermsAccepted(agreement.projectId, agreement.project.ownerId, userId);
+
   const uploadResult = await uploadToSupabase(file, agreement.projectId, userId);
   const { fileUrl, filePath } = uploadResult;
 
   await prisma.agreementSignature.create({
-    data: { agreementId: id, userId, legalName: user.legalName }
+    data: { agreementId: id, userId, legalName: user.legalName, royaltyShare }
   });
 
   const requiredSignerIds = await getRequiredSignerIds(agreement.projectId);
@@ -363,8 +385,10 @@ const esignAgreementService = async (id, userId, intentToSign) => {
     throw error;
   }
 
+  const royaltyShare = await assertRoyaltyTermsAccepted(agreement.projectId, agreement.project.ownerId, userId);
+
   await prisma.agreementSignature.create({
-    data: { agreementId: id, userId, legalName: user.legalName }
+    data: { agreementId: id, userId, legalName: user.legalName, royaltyShare }
   });
 
   const requiredSignerIds = await getRequiredSignerIds(agreement.projectId);
