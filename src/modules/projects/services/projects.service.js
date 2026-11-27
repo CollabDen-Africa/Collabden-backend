@@ -15,6 +15,7 @@ const {
   getPlatformUserSettings,
 } = require("../../../services/platformSettings.service");
 const { resolveMessageVoiceUrls } = require("../../messaging/services/voiceUpload.service");
+const { resolveMessageAttachmentUrls } = require("./projectMessageAttachments.service");
 
 const checkConnection = async (userId, targetId) => {
   const connection = await prisma.userConnection.findFirst({
@@ -555,6 +556,7 @@ const getProjectDetailsService = async (projectId, userId) => {
       messages: {
         orderBy: { createdAt: "desc" },
         take: 50,
+        include: { attachments: true },
       },
       agreements: true,
       activities: {
@@ -612,6 +614,7 @@ const getProjectDetailsService = async (projectId, userId) => {
   }
 
   await resolveMessageVoiceUrls(project.messages);
+  await resolveMessageAttachmentUrls(project.messages);
 
   return project;
 };

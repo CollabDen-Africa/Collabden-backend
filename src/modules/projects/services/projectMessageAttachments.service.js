@@ -98,10 +98,19 @@ const uploadMessageAttachment = async (projectId, userId, file) => {
   });
 
   const path = safeStorageKey(projectId, userId, file.originalname);
-  const { error: uploadError } = await supabase.storage
+  let { error: uploadError } = await supabase.storage
     .from(MESSAGE_ATTACHMENTS_BUCKET)
     .upload(path, file.buffer, { contentType: file.mimetype, upsert: false });
+
+  if (uploadError && (uploadError.statusCode === "404" || uploadError.message?.toLowerCase().includes("not found"))) {
+    await supabase.storage.createBucket(MESSAGE_ATTACHMENTS_BUCKET, { public: false });
+    ({ error: uploadError } = await supabase.storage
+      .from(MESSAGE_ATTACHMENTS_BUCKET)
+      .upload(path, file.buffer, { contentType: file.mimetype, upsert: false }));
+  }
+
   if (uploadError) {
+    console.error("[project message attachment upload] Supabase upload error:", uploadError);
     throw httpError("Attachment upload failed. Please try again.", 502);
   }
 
@@ -109,6 +118,7 @@ const uploadMessageAttachment = async (projectId, userId, file) => {
     .from(MESSAGE_ATTACHMENTS_BUCKET)
     .createSignedUrl(path, PLAYBACK_URL_TTL_SECONDS);
   if (urlError) {
+    console.error("[project message attachment upload] Supabase signed URL error:", urlError);
     throw httpError("Upload succeeded, but failed to generate preview URL.", 502);
   }
 

@@ -25,6 +25,7 @@ const sendMessageRequest = async (senderId, receiverId, initialMessage) => {
   // 1. Verify receiver exists
   const receiver = await prisma.userProfile.findUnique({
     where: { id: receiverId },
+    select: { id: true, whoCanMessage: true },
   });
   if (!receiver) {
     throw new Error("Recipient user not found.");
@@ -42,6 +43,27 @@ const sendMessageRequest = async (senderId, receiverId, initialMessage) => {
 
   if (areConnected) {
     throw new Error("You are already connected with this user. Start a chat directly instead.");
+  }
+
+  // Message-privacy gate. Sender is a stranger (not connected) by the check above.
+  if (receiver.whoCanMessage === "NOBODY" || receiver.whoCanMessage === "CONNECTIONS") {
+    throw new Error("This user isn't accepting message requests right now.");
+  }
+  if (receiver.whoCanMessage === "PROJECT_COLLABORATORS") {
+    const sharedProject = await prisma.projectCollaborator.findFirst({
+      where: {
+        userId: senderId,
+        project: {
+          OR: [
+            { ownerId: receiverId },
+            { collaborators: { some: { userId: receiverId } } },
+          ],
+        },
+      },
+    });
+    if (!sharedProject) {
+      throw new Error("This user only accepts messages from people they're collaborating with on a project.");
+    }
   }
 
   // 3. Check if there is already a pending message request
@@ -611,7 +633,7 @@ const getOrCreateDirectChat = async (userId, recipientId) => {
 
   const recipient = await prisma.userProfile.findUnique({
     where: { id: recipientId },
-    select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true },
+    select: { id: true, email: true, firstName: true, lastName: true, displayName: true, avatarUrl: true, whoCanMessage: true },
   });
 
   if (!recipient) {
@@ -650,6 +672,17 @@ const getOrCreateDirectChat = async (userId, recipientId) => {
 
   if (!areConnected && !hasAcceptedRequest && !sharedProject) {
     throw new Error("You must be connected with this user to start a direct chat.");
+  }
+
+  // Apply the recipient's whoCanMessage preference on top of the relationship check.
+  if (recipient.whoCanMessage === "NOBODY") {
+    throw new Error("This user isn't accepting new conversations right now.");
+  }
+  if (recipient.whoCanMessage === "CONNECTIONS" && !areConnected) {
+    throw new Error("This user only accepts messages from their connections.");
+  }
+  if (recipient.whoCanMessage === "PROJECT_COLLABORATORS" && !sharedProject) {
+    throw new Error("This user only accepts messages from people they're collaborating with on a project.");
   }
 
   const [user1Id, user2Id] = [userId, recipientId].sort();
