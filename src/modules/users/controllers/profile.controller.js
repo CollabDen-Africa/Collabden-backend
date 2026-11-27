@@ -11,6 +11,8 @@ const {
   publicProjectWhere,
   buildPortfolioProjectSelect,
 } = require("../../../utils/publicProfile");
+const { toPublicEndorsement } = require("../../../helpers/endorsementRules");
+const endorsementService = require("../services/endorsement.service");
 const AVATAR_BUCKET = "user-avatars";
 
 /**
@@ -361,35 +363,91 @@ const getProfile = async (req, res) => {
       profile.location = null;
     }
 
-    res.status(200).json(profile);
+
+    const stats = await endorsementService.getProfileStats(userId);
+
+    res.status(200).json({
+      ...profile,
+      receivedEndorsements: profile.receivedEndorsements.map(toPublicEndorsement),
+      stats,
+    });
   } catch (error) {
     console.error("Error fetching profile:", error);
     res.status(500).json({ error: "Failed to fetch profile" });
   }
 };
 
+// Errors from the endorsement service carry a stable `code` for clients.
+const sendEndorsementError = (res, error, fallbackMessage) => {
+  if (error.status) {
+    return res.status(error.status).json({ error: error.message, ...(error.code && { code: error.code }) });
+  }
+  console.error(`${fallbackMessage}:`, error);
+  return res.status(500).json({ error: fallbackMessage });
+};
+
+/**
+ * Endorse a collaborator for a skill on their profile, verified by a shared project.
+ */
 const addEndorsement = async (req, res) => {
   try {
-    const endorserId = req.user.id;
-    const { userId: recipientId } = req.params;
-    const { content } = req.body;
-
-    if (endorserId === recipientId) {
-      return res.status(400).json({ error: "You cannot endorse yourself" });
-    }
-
-    const endorsement = await prisma.endorsement.create({
-      data: {
-        endorserId,
-        recipientId,
-        content,
-      },
-    });
-
+    const endorsement = await endorsementService.createSkillEndorsement(req.user.id, req.params.userId, req.body);
     res.status(201).json({ message: "Endorsement added successfully", endorsement });
   } catch (error) {
-    console.error("Error adding endorsement:", error);
-    res.status(500).json({ error: "Failed to add endorsement" });
+    sendEndorsementError(res, error, "Failed to add endorsement");
+  }
+};
+
+/**
+ * Projects the caller and :userId are both active collaborators on.
+ */
+const getSharedProjects = async (req, res) => {
+  try {
+    const projects = await endorsementService.getSharedProjects(req.user.id, req.params.userId);
+    res.status(200).json(projects);
+  } catch (error) {
+    console.error("Error fetching shared projects:", error);
+    res.status(500).json({ error: "Failed to fetch shared projects" });
+  }
+};
+
+/**
+ * The endorser edits the text or rating of their own endorsement.
+ */
+const updateEndorsement = async (req, res) => {
+  try {
+    const endorsement = await endorsementService.updateEndorsement(req.params.endorsementId, req.user.id, req.body);
+    res.status(200).json({ message: "Endorsement updated successfully", endorsement });
+  } catch (error) {
+    sendEndorsementError(res, error, "Failed to update endorsement");
+  }
+};
+
+/**
+ * The endorser withdraws their own endorsement.
+ */
+const deleteEndorsement = async (req, res) => {
+  try {
+    await endorsementService.deleteEndorsement(req.params.endorsementId, req.user.id);
+    res.status(200).json({ message: "Endorsement withdrawn successfully" });
+  } catch (error) {
+    sendEndorsementError(res, error, "Failed to withdraw endorsement");
+  }
+};
+
+/**
+ * The recipient hides or shows an endorsement on their public profile.
+ */
+const setEndorsementVisibility = async (req, res) => {
+  try {
+    const endorsement = await endorsementService.setEndorsementVisibility(
+      req.params.endorsementId,
+      req.user.id,
+      req.body.hidden
+    );
+    res.status(200).json({ message: "Endorsement visibility updated", endorsement });
+  } catch (error) {
+    sendEndorsementError(res, error, "Failed to update endorsement visibility");
   }
 };
 
@@ -464,69 +522,15 @@ const updatePortfolioEntry = async (req, res) => {
   }
 };
 
+/**
+ * Leave a testimonial (with optional rating) for a collaborator on a completed project.
+ */
 const addProjectEndorsement = async (req, res) => {
   try {
-    const endorserId = req.user.id;
-    const { projectId } = req.params;
-    const { content, recipientId } = req.body;
-
-    if (endorserId === recipientId) {
-      return res.status(400).json({ error: "You cannot endorse yourself" });
-    }
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, status: true },
-    });
-
-    if (!project) {
-      return res.status(404).json({ error: "Project not found" });
-    }
-
-    if (project.status !== "COMPLETED") {
-      return res.status(400).json({
-        error: "Endorsements can only be given after a project is completed",
-      });
-    }
-
-    const endorserCollab = await prisma.projectCollaborator.findUnique({
-      where: { projectId_userId: { projectId, userId: endorserId } }
-    });
-
-    const recipientCollab = await prisma.projectCollaborator.findUnique({
-      where: { projectId_userId: { projectId, userId: recipientId } }
-    });
-
-    if (!endorserCollab || !recipientCollab) {
-      return res.status(400).json({ error: "Both users must be collaborators on the project" });
-    }
-
-    if (!endorserCollab.isActive || !recipientCollab.isActive) {
-      return res.status(400).json({ error: "Both collaborators must have been active on this project to exchange endorsements" });
-    }
-
-    const existing = await prisma.endorsement.findFirst({
-      where: { endorserId, recipientId, projectId },
-    });
-
-    if (existing) {
-      return res.status(409).json({
-        error: "You have already endorsed this collaborator for this project",
-      });
-    }
-
-    const endorsement = await prisma.endorsement.create({
-      data: {
-        endorserId,
-        recipientId,
-        projectId,
-        content,
-      },
-    });
-
+    const endorsement = await endorsementService.createTestimonial(req.user.id, req.params.projectId, req.body);
     res.status(201).json({ message: "Endorsement added successfully", endorsement });
   } catch (error) {
-    console.error("Error adding project endorsement:", error);
-    res.status(500).json({ error: "Failed to add project endorsement" });
+    sendEndorsementError(res, error, "Failed to add project endorsement");
   }
 };
 
@@ -810,6 +814,10 @@ module.exports = {
   getPortfolio,
   updatePortfolioEntry,
   addProjectEndorsement,
+  getSharedProjects,
+  updateEndorsement,
+  deleteEndorsement,
+  setEndorsementVisibility,
   getProfileCompleteness,
   getPreferences,
   updatePreferences,

@@ -8,6 +8,7 @@ const {
   updateProjectService,
   deleteProjectService,
   removeCollaboratorService,
+  completeProjectService,
   getProjectMetadataService,
   getMarketplaceProjectsService,
   getMarketplaceProjectSummaryService,
@@ -51,6 +52,7 @@ const {
 const {
   getProjectRoyaltySplits,
   updateProjectRoyaltySplits,
+  respondToRoyaltySplit,
 } = require("../services/royalty.service");
 const { PROJECT_VISIBILITY } = require("../../../utils/constants");
 
@@ -513,6 +515,16 @@ const deleteProject = async (req, res) => {
   }
 };
 
+const completeProject = async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const project = await completeProjectService(projectId, req.user.id);
+    res.status(200).json({ message: "Project marked as completed.", project });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 const removeCollaborator = async (req, res) => {
   try {
     const { id: projectId } = req.params;
@@ -649,6 +661,18 @@ const updateRoyaltySplits = async (req, res) => {
   }
 };
 
+const respondToRoyaltySplitHandler = async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const userId = req.user.id;
+    const { decision, comment } = req.body;
+    const split = await respondToRoyaltySplit(projectId, userId, decision, comment);
+    res.status(200).json({ message: "Royalty terms response recorded.", split });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createProject,
   uploadProjectFile,
@@ -681,6 +705,7 @@ module.exports = {
   getMyInvites,
   updateProject,
   deleteProject,
+  completeProject,
   removeCollaborator,
   getProjectMetadata,
   getMarketplace,
@@ -689,5 +714,6 @@ module.exports = {
   uploadProjectCover,
   getRoyaltySplits,
   updateRoyaltySplits,
+  respondToRoyaltySplitHandler,
   saveProjectFileToSpace,
 };

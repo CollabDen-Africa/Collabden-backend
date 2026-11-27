@@ -958,6 +958,68 @@ const updateProjectService = async (projectId, userId, updateData) => {
   return updatedProject;
 };
 
+/**
+ * Mark a project as completed. Owner only.
+ * Completion unlocks testimonials and the public portfolio for its collaborators.
+ */
+const completeProjectService = async (projectId, userId) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      ownerId: true,
+      name: true,
+      status: true,
+      isDeleted: true,
+      escrow: { select: { status: true } },
+    },
+  });
+
+  if (!project || project.isDeleted) {
+    const error = new Error("Project not found.");
+    error.status = 404;
+    throw error;
+  }
+
+  if (project.ownerId !== userId) {
+    const error = new Error("Only the project owner can mark this project as completed.");
+    error.status = 403;
+    throw error;
+  }
+
+  if (project.status === "COMPLETED") {
+    const error = new Error("Project is already completed.");
+    error.status = 400;
+    throw error;
+  }
+
+  // Funded escrow still holds collaborators' money; finish or release it first.
+  if (project.escrow && ["FUNDED", "LOCKED"].includes(project.escrow.status)) {
+    const error = new Error("This project has a funded escrow in progress. Release all milestones before marking the project as completed.");
+    error.status = 409;
+    throw error;
+  }
+
+  const updated = await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      openToCollaborators: false,
+    },
+    select: { id: true, name: true, status: true, completedAt: true },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      projectId,
+      action: "PROJECT_COMPLETED",
+      details: `Project "${project.name}" was marked as completed by the owner.`,
+    },
+  });
+
+  return updated;
+};
+
 const deleteProjectService = async (projectId, userId) => {
   if (!projectId) {
     const error = new Error("Project ID is required.");
@@ -1376,6 +1438,7 @@ module.exports = {
   updateProjectService,
   deleteProjectService,
   removeCollaboratorService,
+  completeProjectService,
   getProjectMetadataService,
   getMarketplaceProjectsService,
   getMarketplaceProjectSummaryService,
