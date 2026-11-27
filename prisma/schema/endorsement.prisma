@@ -1,14 +1,32 @@
+enum EndorsementType {
+  SKILL
+  TESTIMONIAL
+}
+
 model Endorsement {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   endorserId  String
   recipientId String
-  content     String
+  type        EndorsementType @default(TESTIMONIAL)
+  // SKILL: one of the recipient's profile skills. Null for testimonials.
+  skill       String?
+  // TESTIMONIAL: optional 1–5 star rating. Null for skill endorsements.
+  rating      Int?
+  content     String?
   projectId   String?
-  isApproved  Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Admin moderation flag; isHidden is the recipient's own choice to hide it from their profile.
+  isApproved  Boolean         @default(true)
+  isHidden    Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   endorser  UserProfile @relation("EndorsementSender", fields: [endorserId], references: [id])
   recipient UserProfile @relation("EndorsementReceiver", fields: [recipientId], references: [id])
   project   Project?    @relation(fields: [projectId], references: [id])
+
+  // Uniqueness per type is enforced by partial unique indexes in the migration
+  // (Prisma cannot express them): one skill endorsement per endorser/recipient/project/skill,
+  // one testimonial per endorser/recipient/project.
+  @@index([recipientId])
+  @@index([endorserId])
 }

@@ -86,6 +86,7 @@ const registerNotificationListeners = (subscriberClient) => {
     EVENT_TYPES.AGREEMENT_CANCELLED,
     EVENT_TYPES.ROYALTY_TERMS_UPDATED,
     EVENT_TYPES.ROYALTY_TERMS_RESPONDED,
+    EVENT_TYPES.ENDORSEMENT_RECEIVED,
     (err) => {
       if (err) {
         console.error("[Subscriber] Failed to subscribe:", err.message);
@@ -200,6 +201,10 @@ const registerNotificationListeners = (subscriberClient) => {
 
         case EVENT_TYPES.ROYALTY_TERMS_RESPONDED:
           await handleRoyaltyTermsResponded(payload);
+          break;
+
+        case EVENT_TYPES.ENDORSEMENT_RECEIVED:
+          await handleEndorsementReceived(payload);
           break;
 
         default:
@@ -1013,6 +1018,27 @@ const handleRoyaltyTermsResponded = async ({ projectId, projectName, ownerId, re
     message: `${responderName} ${verb} their ${royaltyShare}% royalty share in "${projectName || 'your project'}".${comment ? ` Comment: ${comment}` : ''}`,
     type: "ROYALTY_TERMS_RESPONDED",
     link: `/projects/${projectId}/royalties`,
+  });
+};
+
+/**
+ * Handle ENDORSEMENT_RECEIVED event —
+ * tell the recipient someone endorsed a skill or left a testimonial.
+ */
+const handleEndorsementReceived = async ({ type, skill, endorserId, recipientId, projectName }) => {
+  console.log(`[Listener] Processing ENDORSEMENT_RECEIVED for user ${recipientId}`);
+
+  const endorserName = getUserName(await getUserForNotification(endorserId));
+  const isSkill = type === "SKILL";
+
+  await notifyUsers({
+    recipientIds: [recipientId],
+    title: isSkill ? "New Skill Endorsement" : "New Testimonial",
+    message: isSkill
+      ? `${endorserName} endorsed you for ${skill} on "${projectName || 'a project'}".`
+      : `${endorserName} left you a testimonial for "${projectName || 'a project'}".`,
+    type: "ENDORSEMENT_RECEIVED",
+    link: `/profile/${recipientId}`,
   });
 };
 

@@ -38,7 +38,7 @@ test("portfolio select lists only public project fields and named users", () => 
   for (const field of ["budget", "metadata", "pricingType", "visibility", "ownerId"]) {
     assert.equal(field in select, false, `${field} must not be in the portfolio`);
   }
-  assert.deepEqual(Object.keys(select.collaborators.select.user.select).sort(), ["displayName", "firstName", "id", "lastName"]);
-  assert.deepEqual(select.endorsements.where, { recipientId: "u1", isApproved: true });
+  assert.deepEqual(Object.keys(select.collaborators.select.user.select).sort(), ["avatarUrl", "displayName", "firstName", "id", "lastName", "role"]);
+  assert.deepEqual(select.endorsements.where, { recipientId: "u1", isApproved: true, isHidden: false });
   assert.deepEqual(publicProjectWhere, { visibility: "PUBLIC", isDeleted: false });
 });

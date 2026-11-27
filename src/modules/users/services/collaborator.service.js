@@ -280,7 +280,7 @@ const getCollaboratorDetails = async (userId) => {
 
   // 3. Endorsements: Received endorsements
   const endorsements = await prisma.endorsement.findMany({
-    where: { recipientId: userId, isApproved: true },
+    where: { recipientId: userId, isApproved: true, isHidden: false },
     include: {
       endorser: {
         select: {
@@ -304,8 +304,11 @@ const getCollaboratorDetails = async (userId) => {
     history,
     endorsements: endorsements.map((e) => ({
       id: e.id,
-      // Redact review text if admin has disabled collaborator reviews
+      type: e.type,
+      skill: e.skill,
+      // Redact review text and star ratings if admin has disabled them
       content: marketplaceSettings.showCollaboratorReviews ? e.content : null,
+      rating: marketplaceSettings.showCollaboratorRatings ? e.rating : null,
       createdAt: e.createdAt,
       endorser: {
         userId: e.endorser.id,
