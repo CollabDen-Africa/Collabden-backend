@@ -41,6 +41,9 @@ const updateProfile = async (req, res) => {
       "portfolioLinks",
       "socialLinks",
       "openToCollaborate",
+      "displayNameMode",
+      "whoCanMessage",
+      "showLocation",
     ];
 
     // Strip any fields not in the allowed list (extra security layer on top of Zod)
@@ -345,6 +348,7 @@ const updateAvatar = async (req, res) => {
 const getProfile = async (req, res) => {
   try {
     const { userId } = req.params;
+    const viewerId = req.user?.id;
 
     const profile = await prisma.userProfile.findUnique({
       where: { id: userId },
@@ -354,6 +358,11 @@ const getProfile = async (req, res) => {
     if (!profile) {
       return res.status(404).json({ error: "Profile not found" });
     }
+
+    if (viewerId !== userId && profile.showLocation === false) {
+      profile.location = null;
+    }
+
 
     const stats = await endorsementService.getProfileStats(userId);
 

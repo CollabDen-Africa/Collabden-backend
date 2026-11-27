@@ -45,6 +45,15 @@ const updateProfileSchema = z.object({
     .max(MAX_PROFILE_LINKS, `You can add up to ${MAX_PROFILE_LINKS} social links`)
     .optional(),
   openToCollaborate: z.boolean().optional(),
+  displayNameMode: z
+    .enum(["LEGAL", "STAGE"], { error: "displayNameMode must be LEGAL or STAGE" })
+    .optional(),
+  whoCanMessage: z
+    .enum(["EVERYONE", "CONNECTIONS", "PROJECT_COLLABORATORS", "NOBODY"], {
+      error: "whoCanMessage must be EVERYONE, CONNECTIONS, PROJECT_COLLABORATORS, or NOBODY",
+    })
+    .optional(),
+  showLocation: z.boolean().optional(),
 });
 
 
