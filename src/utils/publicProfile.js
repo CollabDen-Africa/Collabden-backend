@@ -8,7 +8,24 @@ const publicUserSelect = {
   displayName: true,
   firstName: true,
   lastName: true,
+  avatarUrl: true,
+  role: true,
 };
+
+// Fields of an endorsement safe to show publicly. `project` is reduced by
+// toPublicEndorsement so private project names never reach a public profile.
+const publicEndorsementSelect = {
+  id: true,
+  type: true,
+  skill: true,
+  rating: true,
+  content: true,
+  projectId: true,
+  createdAt: true,
+  endorser: { select: publicUserSelect },
+};
+
+const visibleEndorsementWhere = { isApproved: true, isHidden: false };
 
 const publicProjectSelect = {
   id: true,
@@ -47,14 +64,12 @@ const publicProfileSelect = {
   tier: true,
   createdAt: true,
   receivedEndorsements: {
-    where: { isApproved: true },
+    where: visibleEndorsementWhere,
     select: {
-      id: true,
-      content: true,
-      projectId: true,
-      createdAt: true,
-      endorser: { select: publicUserSelect },
+      ...publicEndorsementSelect,
+      project: { select: { id: true, name: true, visibility: true, isDeleted: true } },
     },
+    orderBy: { createdAt: "desc" },
   },
   ownedProjects: {
     where: { status: "COMPLETED", ...publicProjectWhere },
@@ -78,13 +93,9 @@ const buildPortfolioProjectSelect = (userId) => ({
     },
   },
   endorsements: {
-    where: { recipientId: userId, isApproved: true },
-    select: {
-      id: true,
-      content: true,
-      createdAt: true,
-      endorser: { select: publicUserSelect },
-    },
+    where: { recipientId: userId, ...visibleEndorsementWhere },
+    select: publicEndorsementSelect,
+    orderBy: { createdAt: "desc" },
   },
 });
 
