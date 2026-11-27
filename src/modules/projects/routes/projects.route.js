@@ -32,6 +32,7 @@ const {
   getMyInvites,
   updateProject,
   deleteProject,
+  completeProject,
   removeCollaborator,
   getProjectMetadata,
   getMarketplace,
@@ -1634,6 +1635,38 @@ router.post("/:id/cover", coverImageUpload.single("coverImage"), uploadProjectCo
  *         description: Project not found
  */
 router.delete("/:id", deleteProject);
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/complete:
+ *   post:
+ *     summary: Mark a project as completed
+ *     description: >
+ *       Owner only. Sets status to COMPLETED, records completedAt and closes the project to new
+ *       collaborators. Completion unlocks testimonials and the public portfolio. Refused while a
+ *       funded escrow is still in progress.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Project marked as completed
+ *       400:
+ *         description: Project is already completed
+ *       403:
+ *         description: Only the project owner can complete the project
+ *       404:
+ *         description: Project not found
+ *       409:
+ *         description: A funded escrow is still in progress
+ */
+router.post("/:id/complete", completeProject);
 
 /**
  * @swagger
