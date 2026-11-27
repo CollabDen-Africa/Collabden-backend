@@ -26,6 +26,18 @@ enum ThemePreference {
   SYSTEM
 }
 
+enum DisplayNameMode {
+  LEGAL
+  STAGE
+}
+
+enum MessagePrivacy {
+  EVERYONE
+  CONNECTIONS
+  PROJECT_COLLABORATORS
+  NOBODY
+}
+
 model UserProfile {
   id                      String                @id @default(cuid())
   email                   String                @unique
@@ -54,6 +66,9 @@ model UserProfile {
   socialLinks             String[]
   phoneNumber             String?
   openToCollaborate       Boolean               @default(false)
+  displayNameMode         DisplayNameMode       @default(LEGAL)
+  whoCanMessage           MessagePrivacy        @default(EVERYONE)
+  showLocation            Boolean               @default(true)
   verificationToken       String?               @unique
   verificationTokenExpiry DateTime?
   resetToken              String?               @unique

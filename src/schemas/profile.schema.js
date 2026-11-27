@@ -19,6 +19,15 @@ const updateProfileSchema = z.object({
   portfolioLinks: z.array(z.string().url("Each portfolio link must be a valid URL")).optional(),
   socialLinks: z.array(z.string().url("Each social link must be a valid URL")).optional(),
   openToCollaborate: z.boolean().optional(),
+  displayNameMode: z
+    .enum(["LEGAL", "STAGE"], { error: "displayNameMode must be LEGAL or STAGE" })
+    .optional(),
+  whoCanMessage: z
+    .enum(["EVERYONE", "CONNECTIONS", "PROJECT_COLLABORATORS", "NOBODY"], {
+      error: "whoCanMessage must be EVERYONE, CONNECTIONS, PROJECT_COLLABORATORS, or NOBODY",
+    })
+    .optional(),
+  showLocation: z.boolean().optional(),
 });
 
 

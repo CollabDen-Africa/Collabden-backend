@@ -6,6 +6,7 @@
 const publicUserSelect = {
   id: true,
   displayName: true,
+  displayNameMode: true,
   firstName: true,
   lastName: true,
 };
@@ -45,6 +46,8 @@ const publicProfileSelect = {
   openToCollaborate: true,
   identityVerified: true,
   tier: true,
+  displayNameMode: true,
+  showLocation: true,
   createdAt: true,
   receivedEndorsements: {
     where: { isApproved: true },
